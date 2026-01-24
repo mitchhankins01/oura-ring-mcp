@@ -8,7 +8,16 @@
 
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { OuraClient, SleepSession } from "../client.js";
+import {
+  OuraClient,
+  SleepSession,
+  DailySleep,
+  DailyStress,
+  HeartRate,
+  Workout,
+  DailySpo2,
+  VO2Max,
+} from "../client.js";
 import {
   formatDuration,
   formatTime,
@@ -185,6 +194,264 @@ export function registerTools(server: McpServer, client: OuraClient) {
       };
     }
   );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_stress tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_stress",
+    {
+      description:
+        "Get daily stress levels and recovery time. Shows time spent in high stress vs high recovery zones, plus overall day summary (restored/normal/stressful). Use this to understand stress patterns and recovery balance.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      const startDate = start_date || getToday();
+      const endDate = end_date || startDate;
+
+      const response = await client.getDailyStress(startDate, endDate);
+
+      if (response.data.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No stress data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+            },
+          ],
+        };
+      }
+
+      const formatted = response.data.map((day) => formatStress(day));
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formatted.join("\n\n---\n\n"),
+          },
+        ],
+      };
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_daily_sleep tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_daily_sleep",
+    {
+      description:
+        "Get daily sleep scores and contributors (efficiency, deep sleep, REM sleep, latency, timing, etc.). Different from get_sleep - this provides a single daily score with breakdown of what contributed to it. Use this for understanding sleep quality scoring.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      const startDate = start_date || getToday();
+      const endDate = end_date || startDate;
+
+      const response = await client.getDailySleep(startDate, endDate);
+
+      if (response.data.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No daily sleep data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+            },
+          ],
+        };
+      }
+
+      const formatted = response.data.map((day) => formatDailySleep(day));
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formatted.join("\n\n---\n\n"),
+          },
+        ],
+      };
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_heart_rate tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_heart_rate",
+    {
+      description:
+        "Get individual heart rate readings throughout the day with timestamps and source (awake, rest, sleep, workout, etc.). Returns detailed time-series data. Use this for analyzing heart rate patterns, variability throughout the day, or correlating HR with activities.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      const startDate = start_date || getToday();
+      const endDate = end_date || startDate;
+
+      const response = await client.getHeartRate(startDate, endDate);
+
+      if (response.data.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No heart rate data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+            },
+          ],
+        };
+      }
+
+      const formatted = formatHeartRateData(response.data);
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formatted,
+          },
+        ],
+      };
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_workouts tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_workouts",
+    {
+      description:
+        "Get workout sessions with activity type, duration, intensity, calories burned, and distance. Use this to analyze exercise patterns, workout frequency, and training load.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      const startDate = start_date || getToday();
+      const endDate = end_date || startDate;
+
+      const response = await client.getWorkouts(startDate, endDate);
+
+      if (response.data.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No workout data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+            },
+          ],
+        };
+      }
+
+      const formatted = response.data.map((workout) => formatWorkout(workout));
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formatted.join("\n\n---\n\n"),
+          },
+        ],
+      };
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_spo2 tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_spo2",
+    {
+      description:
+        "Get daily SpO2 (blood oxygen saturation) percentage and breathing disturbance index. Use this to monitor respiratory health, detect sleep apnea patterns, or understand overnight oxygen levels.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      const startDate = start_date || getToday();
+      const endDate = end_date || startDate;
+
+      const response = await client.getDailySpo2(startDate, endDate);
+
+      if (response.data.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No SpO2 data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Note: SpO2 tracking requires a compatible Oura Ring (Gen 3 or later).`,
+            },
+          ],
+        };
+      }
+
+      const formatted = response.data.map((day) => formatSpo2(day));
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formatted.join("\n\n---\n\n"),
+          },
+        ],
+      };
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_vo2_max tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_vo2_max",
+    {
+      description:
+        "Get VO2 max measurements (cardiorespiratory fitness). VO2 max indicates the maximum amount of oxygen your body can use during intense exercise. Higher values indicate better cardiovascular fitness. Use this to track fitness improvements over time.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      const startDate = start_date || getToday();
+      const endDate = end_date || startDate;
+
+      const response = await client.getVO2Max(startDate, endDate);
+
+      if (response.data.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No VO2 max data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Note: VO2 max estimates require regular activity and workout data.`,
+            },
+          ],
+        };
+      }
+
+      const formatted = response.data.map((measurement) => formatVO2Max(measurement));
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formatted.join("\n\n---\n\n"),
+          },
+        ],
+      };
+    }
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -235,6 +502,178 @@ function formatSleepSession(session: SleepSession): string {
   if (session.latency) {
     lines.push(`\n**Sleep Latency:** ${formatDuration(session.latency)} to fall asleep`);
   }
+
+  return lines.join("\n");
+}
+
+function formatStress(day: DailyStress): string {
+  const lines = [
+    `## Stress: ${day.day}`,
+  ];
+
+  if (day.day_summary) {
+    const summaryLabel = day.day_summary.charAt(0).toUpperCase() + day.day_summary.slice(1);
+    lines.push(`**Day Summary:** ${summaryLabel}`);
+    lines.push("");
+  }
+
+  lines.push("**Time Breakdown:**");
+
+  if (day.stress_high !== null) {
+    lines.push(`- High Stress: ${formatDuration(day.stress_high)}`);
+  } else {
+    lines.push("- High Stress: N/A");
+  }
+
+  if (day.recovery_high !== null) {
+    lines.push(`- High Recovery: ${formatDuration(day.recovery_high)}`);
+  } else {
+    lines.push("- High Recovery: N/A");
+  }
+
+  return lines.join("\n");
+}
+
+function formatDailySleep(day: DailySleep): string {
+  const c = day.contributors;
+  return [
+    `## Daily Sleep Score: ${day.day}`,
+    `**Score:** ${formatScore(day.score)}`,
+    "",
+    "**Contributors:**",
+    `- Total Sleep: ${c.total_sleep ?? "N/A"}`,
+    `- Efficiency: ${c.efficiency ?? "N/A"}`,
+    `- Restfulness: ${c.restfulness ?? "N/A"}`,
+    `- REM Sleep: ${c.rem_sleep ?? "N/A"}`,
+    `- Deep Sleep: ${c.deep_sleep ?? "N/A"}`,
+    `- Latency: ${c.latency ?? "N/A"}`,
+    `- Timing: ${c.timing ?? "N/A"}`,
+  ].join("\n");
+}
+
+function formatHeartRateData(readings: HeartRate[]): string {
+  // Group readings by source for better readability
+  const bySource: Record<string, HeartRate[]> = {};
+
+  readings.forEach((reading) => {
+    const source = reading.source;
+    if (!bySource[source]) {
+      bySource[source] = [];
+    }
+    bySource[source].push(reading);
+  });
+
+  const lines = [
+    `## Heart Rate Data (${readings.length} readings)`,
+    "",
+  ];
+
+  // Calculate overall stats
+  const allBpms = readings.map((r) => r.bpm);
+  const avgBpm = Math.round(allBpms.reduce((a, b) => a + b, 0) / allBpms.length);
+  const minBpm = Math.min(...allBpms);
+  const maxBpm = Math.max(...allBpms);
+
+  lines.push("**Overall Statistics:**");
+  lines.push(`- Average: ${avgBpm} bpm`);
+  lines.push(`- Range: ${minBpm} - ${maxBpm} bpm`);
+  lines.push("");
+
+  lines.push("**Breakdown by Source:**");
+  Object.entries(bySource).forEach(([source, sourceReadings]) => {
+    const sourceBpms = sourceReadings.map((r) => r.bpm);
+    const sourceAvg = Math.round(sourceBpms.reduce((a, b) => a + b, 0) / sourceBpms.length);
+    const sourceLabel = source.charAt(0).toUpperCase() + source.slice(1);
+    lines.push(`- ${sourceLabel}: ${sourceReadings.length} readings, avg ${sourceAvg} bpm`);
+  });
+
+  return lines.join("\n");
+}
+
+function formatWorkout(workout: Workout): string {
+  const lines = [
+    `## Workout: ${workout.day}`,
+    `**Activity:** ${workout.activity}${workout.label ? ` (${workout.label})` : ""}`,
+    `**Time:** ${formatTime(workout.start_datetime)} → ${formatTime(workout.end_datetime)}`,
+    `**Intensity:** ${workout.intensity.charAt(0).toUpperCase() + workout.intensity.slice(1)}`,
+  ];
+
+  if (workout.calories !== null && workout.calories !== undefined) {
+    lines.push(`**Calories:** ${workout.calories.toLocaleString()} kcal`);
+  }
+
+  if (workout.distance !== null && workout.distance !== undefined) {
+    lines.push(`**Distance:** ${(workout.distance / 1000).toFixed(2)} km`);
+  }
+
+  lines.push(`**Source:** ${workout.source}`);
+
+  return lines.join("\n");
+}
+
+function formatSpo2(day: DailySpo2): string {
+  const lines = [
+    `## SpO2: ${day.day}`,
+  ];
+
+  if (day.spo2_percentage?.average !== null && day.spo2_percentage?.average !== undefined) {
+    lines.push(`**Average SpO2:** ${day.spo2_percentage.average.toFixed(1)}%`);
+  } else {
+    lines.push("**Average SpO2:** N/A");
+  }
+
+  if (day.breathing_disturbance_index !== null) {
+    lines.push(`**Breathing Disturbance Index:** ${day.breathing_disturbance_index.toFixed(1)}`);
+
+    // Add context for BDI
+    let bdiContext = "";
+    if (day.breathing_disturbance_index < 5) {
+      bdiContext = "(Normal)";
+    } else if (day.breathing_disturbance_index < 15) {
+      bdiContext = "(Mild disturbance)";
+    } else if (day.breathing_disturbance_index < 30) {
+      bdiContext = "(Moderate disturbance)";
+    } else {
+      bdiContext = "(Significant disturbance - consider consulting a doctor)";
+    }
+    lines.push(`  ${bdiContext}`);
+  } else {
+    lines.push("**Breathing Disturbance Index:** N/A");
+  }
+
+  return lines.join("\n");
+}
+
+function formatVO2Max(measurement: VO2Max): string {
+  const lines = [
+    `## VO2 Max: ${measurement.day}`,
+  ];
+
+  if (measurement.vo2_max !== null) {
+    lines.push(`**VO2 Max:** ${measurement.vo2_max.toFixed(1)} ml/kg/min`);
+
+    // Add fitness level context (approximate ranges for adults)
+    let fitnessLevel = "";
+    const vo2 = measurement.vo2_max;
+    if (vo2 < 30) {
+      fitnessLevel = "(Poor)";
+    } else if (vo2 < 40) {
+      fitnessLevel = "(Below average)";
+    } else if (vo2 < 45) {
+      fitnessLevel = "(Average)";
+    } else if (vo2 < 50) {
+      fitnessLevel = "(Good)";
+    } else if (vo2 < 55) {
+      fitnessLevel = "(Very good)";
+    } else {
+      fitnessLevel = "(Excellent)";
+    }
+    lines.push(`  ${fitnessLevel}`);
+  } else {
+    lines.push("**VO2 Max:** N/A");
+  }
+
+  lines.push(`**Measured:** ${formatTime(measurement.timestamp)}`);
 
   return lines.join("\n");
 }

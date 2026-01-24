@@ -28,6 +28,23 @@ src/
     └── formatters.ts  # Human-readable formatting (seconds→hours, etc.)
 ```
 
+## Current Tools (9 available)
+
+**Sleep & Recovery:**
+- `get_sleep` - Detailed sleep sessions with stages, efficiency, HR, HRV
+- `get_daily_sleep` - Daily sleep scores with contributors
+- `get_readiness` - Daily readiness scores and recovery metrics
+
+**Activity & Fitness:**
+- `get_activity` - Daily activity, steps, calories, intensity breakdown
+- `get_workouts` - Workout sessions with type, duration, intensity
+- `get_vo2_max` - Cardiorespiratory fitness measurements
+
+**Health Metrics:**
+- `get_stress` - Stress levels and recovery time
+- `get_heart_rate` - Individual HR readings throughout the day
+- `get_spo2` - Blood oxygen saturation and breathing disturbance
+
 ## Notes
 
 - Oura PAT tokens deprecated end of 2025 → Phase 4a adds OAuth CLI flow
@@ -48,7 +65,14 @@ src/
 
 ### Phase 2: Cover the API
 - [x] Generate types from OpenAPI: `pnpm generate-types`
-- [ ] Add remaining endpoints (heart rate, stress, workouts, etc.)
+- [x] Add high-priority endpoints:
+  - [x] `get_stress` - Daily stress levels and recovery time
+  - [x] `get_daily_sleep` - Sleep scores with contributors
+  - [x] `get_heart_rate` - Individual HR readings with timestamps
+  - [x] `get_workouts` - Workout sessions with activity type and intensity
+  - [x] `get_spo2` - Blood oxygen saturation and breathing disturbance index
+  - [x] `get_vo2_max` - Cardiorespiratory fitness measurements
+- [ ] Add remaining endpoints (resilience, cardiovascular age, tags, sessions, etc.)
 - [ ] Add MCP resources (`oura://today`, `oura://weekly-summary`)
 - [ ] Better error messages
 

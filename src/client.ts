@@ -12,6 +12,11 @@ export type SleepSession = components["schemas"]["SleepModel"];
 export type DailySleep = components["schemas"]["DailySleepModel"];
 export type DailyReadiness = components["schemas"]["DailyReadinessModel"];
 export type DailyActivity = components["schemas"]["DailyActivityModel"];
+export type DailyStress = components["schemas"]["DailyStressModel"];
+export type HeartRate = components["schemas"]["HeartRateModel"];
+export type Workout = components["schemas"]["PublicWorkout"];
+export type DailySpo2 = components["schemas"]["DailySpO2Model"];
+export type VO2Max = components["schemas"]["VO2MaxModel"];
 export type PersonalInfo = components["schemas"]["PersonalInfoResponse"];
 
 export interface OuraClientConfig {
@@ -92,6 +97,61 @@ export class OuraClient {
 
   async getDailyActivity(startDate: string, endDate: string) {
     return this.fetch<OuraResponse<DailyActivity>>("daily_activity", {
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Stress endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  async getDailyStress(startDate: string, endDate: string) {
+    return this.fetch<OuraResponse<DailyStress>>("daily_stress", {
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Heart rate endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  async getHeartRate(startDate: string, endDate: string) {
+    return this.fetch<OuraResponse<HeartRate>>("heartrate", {
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Workout endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  async getWorkouts(startDate: string, endDate: string) {
+    return this.fetch<OuraResponse<Workout>>("workout", {
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // SpO2 endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  async getDailySpo2(startDate: string, endDate: string) {
+    return this.fetch<OuraResponse<DailySpo2>>("daily_spo2", {
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // VO2 Max endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  async getVO2Max(startDate: string, endDate: string) {
+    return this.fetch<OuraResponse<VO2Max>>("vO2_max", {
       start_date: startDate,
       end_date: endDate,
     });
