@@ -75,6 +75,14 @@ src/
 - [ ] Add remaining endpoints (resilience, cardiovascular age, tags, sessions, etc.)
 - [ ] Add MCP resources (`oura://today`, `oura://weekly-summary`)
 - [ ] Better error messages
+- [x] Set up Vitest with coverage thresholds (75/80/80/80)
+- [x] Create test infrastructure (fixtures, helpers directories)
+- [x] Write comprehensive tests for formatters (96%+ coverage achieved)
+- [ ] Add tests for Oura client (mocked fetch)
+- [ ] Add tests for tool handlers (mocked client)
+- [ ] Add tests for MCP server (mocked SDK)
+- [ ] Set up CI/CD for automated testing (GitHub Actions)
+- [ ] Add pre-commit hooks for test validation
 
 ### Phase 3: Make it Smart
 See `docs/RESEARCH.md` for detailed inspiration, formulas, and code examples from Wearipedia notebook.
@@ -171,11 +179,53 @@ pnpm build            # Compile TypeScript
 pnpm dev              # Watch mode
 pnpm start            # Run the server
 
+# Testing
+pnpm test             # Run all tests
+pnpm test:watch       # Watch mode for development
+pnpm test:coverage    # Run tests with coverage report
+pnpm test:ui          # Open Vitest UI in browser
+
 # OpenAPI & Type Generation
 pnpm update-openapi   # Download latest OpenAPI spec from Oura
 pnpm generate-types   # Generate TypeScript types from spec
 pnpm update-types     # Update spec AND generate types (convenience)
 ```
+
+## Testing Strategy
+
+We use **Vitest** for testing with the following structure:
+
+**Test Organization:**
+- Tests are co-located with source files (`*.test.ts`)
+- Shared fixtures in `tests/fixtures/` (sample API responses)
+- Test utilities in `tests/helpers/` (mocks, helpers)
+
+**Coverage Thresholds:**
+```json
+{
+  "branches": 75,
+  "functions": 80,
+  "lines": 80,
+  "statements": 80
+}
+```
+
+**What We Test:**
+1. **Formatters** (`utils/formatters.ts`) - Unit tests, 90%+ coverage target
+2. **Tool Handlers** (`tools/index.ts`) - Unit tests with mocked client
+3. **Oura Client** (`client.ts`) - Integration tests with mocked fetch
+4. **MCP Server** (`index.ts`) - Integration tests with mocked SDK
+
+**Mock Strategy:**
+- Oura API calls → `nock` or `msw` for deterministic testing
+- Environment vars → Override `process.env` in tests
+- Date/time → `vitest.useFakeTimers()` for consistent "today" tests
+
+**Exclusions:**
+- Generated types (`src/types/oura-api.ts`) excluded from coverage
+- Scripts and config files excluded
+
+See `tests/README.md` for detailed testing guidelines.
 
 ## Keeping Types Up-to-Date
 

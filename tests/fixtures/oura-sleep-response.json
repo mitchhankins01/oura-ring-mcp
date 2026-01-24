@@ -1,0 +1,28 @@
+{
+  "data": [
+    {
+      "id": "abc123",
+      "day": "2024-01-15",
+      "bedtime_start": "2024-01-14T23:30:00+00:00",
+      "bedtime_end": "2024-01-15T07:45:00+00:00",
+      "total_sleep_duration": 27000,
+      "time_in_bed": 29700,
+      "efficiency": 90,
+      "awake_time": 2700,
+      "light_sleep_duration": 14400,
+      "rem_sleep_duration": 5400,
+      "deep_sleep_duration": 7200,
+      "average_heart_rate": 55,
+      "average_hrv": 65,
+      "lowest_heart_rate": 48,
+      "rmssd": 52,
+      "restless_periods": 3,
+      "sleep_score_delta": 0,
+      "sleep_algorithm_version": "v2",
+      "latency": 600,
+      "timing": 85,
+      "type": "long_sleep"
+    }
+  ],
+  "next_token": null
+}
