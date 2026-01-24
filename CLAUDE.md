@@ -135,10 +135,11 @@ See `docs/RESEARCH.md` for detailed inspiration, formulas, and code examples fro
   - Screenshots
 - [ ] Add to MCP registry
 
-### Phase 4b: Remote Access (Optional)
+### Phase 4b: Remote Access
 - [ ] HTTP transport (SSE) for remote connections
 - [ ] Hosted OAuth callback flow
 - [ ] Deploy to Railway/Fly/Render
+- [ ] Add production monitoring (highlight/datadog etc)
 - [ ] Connect from Claude mobile (when MCP support lands)
 
 ## Key Files
@@ -270,7 +271,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 **Important Notes**:
 - Replace `/absolute/path/to/oura-mcp` with your actual installation path
-- The MCP SDK requires **Node >=18**. If Claude Desktop is using an older Node version (check logs), specify the full path to a modern Node:
+- This project requires **Node >=24**. If Claude Desktop is using an older Node version (check logs), specify the full path to a modern Node:
   ```json
   "command": "/Users/yourusername/.nvm/versions/node/v24.7.0/bin/node"
   ```

@@ -42,7 +42,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-**Important**: Replace `/absolute/path/to/oura-mcp` with the actual path to your installation. The MCP SDK requires Node >=18, so make sure Claude Desktop is using a modern Node version.
+**Important**: Replace `/absolute/path/to/oura-mcp` with the actual path to your installation. This project requires Node >=24, so make sure Claude Desktop is using a modern Node version.
 
 Restart Claude Desktop.
 
@@ -80,9 +80,15 @@ Once connected, try asking Claude:
 
 | Tool | Description |
 |------|-------------|
-| `get_sleep` | Detailed sleep data with stages, efficiency, HRV |
-| `get_readiness` | Recovery scores and contributors |
-| `get_activity` | Steps, calories, activity breakdown |
+| `get_sleep` | Detailed sleep sessions with stages, efficiency, HR, HRV |
+| `get_daily_sleep` | Daily sleep scores with contributors |
+| `get_readiness` | Daily readiness scores and recovery metrics |
+| `get_activity` | Daily activity, steps, calories, intensity breakdown |
+| `get_workouts` | Workout sessions with type, duration, intensity |
+| `get_stress` | Stress levels and recovery time |
+| `get_heart_rate` | Individual HR readings throughout the day |
+| `get_spo2` | Blood oxygen saturation and breathing disturbance |
+| `get_vo2_max` | Cardiorespiratory fitness measurements |
 
 ## Development
 
@@ -119,9 +125,9 @@ This automatically scrapes the latest OpenAPI spec from Oura's docs and regenera
 - [x] Automated spec updates
 
 **Phase 2: Cover the API** (In Progress)
-- [ ] More endpoints (heart rate, stress, workouts, SPO2, tags)
+- [x] More endpoints (heart rate, stress, workouts, SPO2, VO2 max)
 - [ ] MCP resources (`oura://today`, `oura://weekly-summary`)
-- [ ] Better error messages
+- [ ] Remaining endpoints (resilience, cardiovascular age, tags, sessions)
 
 **Phase 3: Make it Smart**
 - [ ] Derived metrics (sleep debt, rolling averages, trends)

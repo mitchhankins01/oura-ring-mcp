@@ -45,33 +45,44 @@ export function registerTools(server: McpServer, client: OuraClient) {
       },
     },
     async ({ start_date, end_date }) => {
-      const startDate = start_date || getToday();
-      const endDate = end_date || startDate;
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
 
-      const response = await client.getSleep(startDate, endDate);
+        const response = await client.getSleep(startDate, endDate);
 
-      if (response.data.length === 0) {
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No sleep data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Make sure your Oura Ring has synced.`,
+              },
+            ],
+          };
+        }
+
+        // Format each sleep session with human-readable summary + raw data
+        const formatted = response.data.map((session) => formatSleepSession(session));
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `No sleep data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Make sure your Oura Ring has synced.`,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching sleep data: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
         };
       }
-
-      // Format each sleep session with human-readable summary + raw data
-      const formatted = response.data.map((session) => formatSleepSession(session));
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatted.join("\n\n---\n\n"),
-          },
-        ],
-      };
     }
   );
 
@@ -89,51 +100,62 @@ export function registerTools(server: McpServer, client: OuraClient) {
       },
     },
     async ({ start_date, end_date }) => {
-      const startDate = start_date || getToday();
-      const endDate = end_date || startDate;
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
 
-      const response = await client.getDailyReadiness(startDate, endDate);
+        const response = await client.getDailyReadiness(startDate, endDate);
 
-      if (response.data.length === 0) {
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No readiness data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((day) => {
+          const c = day.contributors;
+          return [
+            `## Readiness: ${day.day}`,
+            `**Score:** ${formatScore(day.score)}`,
+            "",
+            "**Contributors:**",
+            `- HRV Balance: ${c.hrv_balance ?? "N/A"}`,
+            `- Resting Heart Rate: ${c.resting_heart_rate ?? "N/A"}`,
+            `- Recovery Index: ${c.recovery_index ?? "N/A"}`,
+            `- Sleep Balance: ${c.sleep_balance ?? "N/A"}`,
+            `- Previous Night: ${c.previous_night ?? "N/A"}`,
+            `- Previous Day Activity: ${c.previous_day_activity ?? "N/A"}`,
+            `- Activity Balance: ${c.activity_balance ?? "N/A"}`,
+            `- Body Temperature: ${c.body_temperature ?? "N/A"}`,
+            day.temperature_deviation !== null
+              ? `\n**Temperature Deviation:** ${day.temperature_deviation}°C`
+              : "",
+          ].join("\n");
+        });
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `No readiness data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching readiness data: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
         };
       }
-
-      const formatted = response.data.map((day) => {
-        const c = day.contributors;
-        return [
-          `## Readiness: ${day.day}`,
-          `**Score:** ${formatScore(day.score)}`,
-          "",
-          "**Contributors:**",
-          `- HRV Balance: ${c.hrv_balance ?? "N/A"}`,
-          `- Resting Heart Rate: ${c.resting_heart_rate ?? "N/A"}`,
-          `- Recovery Index: ${c.recovery_index ?? "N/A"}`,
-          `- Sleep Balance: ${c.sleep_balance ?? "N/A"}`,
-          `- Previous Night: ${c.previous_night ?? "N/A"}`,
-          `- Previous Day Activity: ${c.previous_day_activity ?? "N/A"}`,
-          `- Activity Balance: ${c.activity_balance ?? "N/A"}`,
-          `- Body Temperature: ${c.body_temperature ?? "N/A"}`,
-          day.temperature_deviation !== null
-            ? `\n**Temperature Deviation:** ${day.temperature_deviation}°C`
-            : "",
-        ].join("\n");
-      });
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatted.join("\n\n---\n\n"),
-          },
-        ],
-      };
     }
   );
 
@@ -151,47 +173,58 @@ export function registerTools(server: McpServer, client: OuraClient) {
       },
     },
     async ({ start_date, end_date }) => {
-      const startDate = start_date || getToday();
-      const endDate = end_date || startDate;
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
 
-      const response = await client.getDailyActivity(startDate, endDate);
+        const response = await client.getDailyActivity(startDate, endDate);
 
-      if (response.data.length === 0) {
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No activity data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((day) => {
+          return [
+            `## Activity: ${day.day}`,
+            `**Score:** ${formatScore(day.score)}`,
+            `**Steps:** ${day.steps.toLocaleString()}`,
+            `**Calories:** ${day.total_calories.toLocaleString()} total (${day.active_calories.toLocaleString()} active)`,
+            `**Walking Equivalent:** ${(day.equivalent_walking_distance / 1000).toFixed(1)} km`,
+            "",
+            "**Activity Breakdown:**",
+            `- High Intensity: ${formatDuration(day.high_activity_time)}`,
+            `- Medium Intensity: ${formatDuration(day.medium_activity_time)}`,
+            `- Low Intensity: ${formatDuration(day.low_activity_time)}`,
+            `- Sedentary: ${formatDuration(day.sedentary_time)}`,
+            `- Resting: ${formatDuration(day.resting_time)}`,
+          ].join("\n");
+        });
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `No activity data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching activity data: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
         };
       }
-
-      const formatted = response.data.map((day) => {
-        return [
-          `## Activity: ${day.day}`,
-          `**Score:** ${formatScore(day.score)}`,
-          `**Steps:** ${day.steps.toLocaleString()}`,
-          `**Calories:** ${day.total_calories.toLocaleString()} total (${day.active_calories.toLocaleString()} active)`,
-          `**Walking Equivalent:** ${(day.equivalent_walking_distance / 1000).toFixed(1)} km`,
-          "",
-          "**Activity Breakdown:**",
-          `- High Intensity: ${formatDuration(day.high_activity_time)}`,
-          `- Medium Intensity: ${formatDuration(day.medium_activity_time)}`,
-          `- Low Intensity: ${formatDuration(day.low_activity_time)}`,
-          `- Sedentary: ${formatDuration(day.sedentary_time)}`,
-          `- Resting: ${formatDuration(day.resting_time)}`,
-        ].join("\n");
-      });
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatted.join("\n\n---\n\n"),
-          },
-        ],
-      };
     }
   );
 
@@ -209,32 +242,43 @@ export function registerTools(server: McpServer, client: OuraClient) {
       },
     },
     async ({ start_date, end_date }) => {
-      const startDate = start_date || getToday();
-      const endDate = end_date || startDate;
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
 
-      const response = await client.getDailyStress(startDate, endDate);
+        const response = await client.getDailyStress(startDate, endDate);
 
-      if (response.data.length === 0) {
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No stress data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((day) => formatStress(day));
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `No stress data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching stress data: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
         };
       }
-
-      const formatted = response.data.map((day) => formatStress(day));
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatted.join("\n\n---\n\n"),
-          },
-        ],
-      };
     }
   );
 
@@ -252,32 +296,43 @@ export function registerTools(server: McpServer, client: OuraClient) {
       },
     },
     async ({ start_date, end_date }) => {
-      const startDate = start_date || getToday();
-      const endDate = end_date || startDate;
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
 
-      const response = await client.getDailySleep(startDate, endDate);
+        const response = await client.getDailySleep(startDate, endDate);
 
-      if (response.data.length === 0) {
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No daily sleep data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((day) => formatDailySleep(day));
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `No daily sleep data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching daily sleep data: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
         };
       }
-
-      const formatted = response.data.map((day) => formatDailySleep(day));
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatted.join("\n\n---\n\n"),
-          },
-        ],
-      };
     }
   );
 
@@ -295,32 +350,43 @@ export function registerTools(server: McpServer, client: OuraClient) {
       },
     },
     async ({ start_date, end_date }) => {
-      const startDate = start_date || getToday();
-      const endDate = end_date || startDate;
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
 
-      const response = await client.getHeartRate(startDate, endDate);
+        const response = await client.getHeartRate(startDate, endDate);
 
-      if (response.data.length === 0) {
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No heart rate data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = formatHeartRateData(response.data);
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `No heart rate data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              text: formatted,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching heart rate data: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
         };
       }
-
-      const formatted = formatHeartRateData(response.data);
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatted,
-          },
-        ],
-      };
     }
   );
 
@@ -338,32 +404,43 @@ export function registerTools(server: McpServer, client: OuraClient) {
       },
     },
     async ({ start_date, end_date }) => {
-      const startDate = start_date || getToday();
-      const endDate = end_date || startDate;
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
 
-      const response = await client.getWorkouts(startDate, endDate);
+        const response = await client.getWorkouts(startDate, endDate);
 
-      if (response.data.length === 0) {
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No workout data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((workout) => formatWorkout(workout));
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `No workout data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching workout data: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
         };
       }
-
-      const formatted = response.data.map((workout) => formatWorkout(workout));
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatted.join("\n\n---\n\n"),
-          },
-        ],
-      };
     }
   );
 
@@ -381,32 +458,43 @@ export function registerTools(server: McpServer, client: OuraClient) {
       },
     },
     async ({ start_date, end_date }) => {
-      const startDate = start_date || getToday();
-      const endDate = end_date || startDate;
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
 
-      const response = await client.getDailySpo2(startDate, endDate);
+        const response = await client.getDailySpo2(startDate, endDate);
 
-      if (response.data.length === 0) {
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No SpO2 data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Note: SpO2 tracking requires a compatible Oura Ring (Gen 3 or later).`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((day) => formatSpo2(day));
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `No SpO2 data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Note: SpO2 tracking requires a compatible Oura Ring (Gen 3 or later).`,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching SpO2 data: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
         };
       }
-
-      const formatted = response.data.map((day) => formatSpo2(day));
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatted.join("\n\n---\n\n"),
-          },
-        ],
-      };
     }
   );
 
@@ -424,32 +512,43 @@ export function registerTools(server: McpServer, client: OuraClient) {
       },
     },
     async ({ start_date, end_date }) => {
-      const startDate = start_date || getToday();
-      const endDate = end_date || startDate;
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
 
-      const response = await client.getVO2Max(startDate, endDate);
+        const response = await client.getVO2Max(startDate, endDate);
 
-      if (response.data.length === 0) {
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No VO2 max data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Note: VO2 max estimates require regular activity and workout data.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((measurement) => formatVO2Max(measurement));
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `No VO2 max data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Note: VO2 max estimates require regular activity and workout data.`,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching VO2 max data: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
         };
       }
-
-      const formatted = response.data.map((measurement) => formatVO2Max(measurement));
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formatted.join("\n\n---\n\n"),
-          },
-        ],
-      };
     }
   );
 }
@@ -552,6 +651,11 @@ function formatDailySleep(day: DailySleep): string {
 }
 
 function formatHeartRateData(readings: HeartRate[]): string {
+  // Handle empty array edge case
+  if (readings.length === 0) {
+    return "## Heart Rate Data (0 readings)\n\nNo heart rate readings available.";
+  }
+
   // Group readings by source for better readability
   const bySource: Record<string, HeartRate[]> = {};
 
@@ -616,7 +720,7 @@ function formatSpo2(day: DailySpo2): string {
     `## SpO2: ${day.day}`,
   ];
 
-  if (day.spo2_percentage?.average !== null && day.spo2_percentage?.average !== undefined) {
+  if (day.spo2_percentage?.average != null) {
     lines.push(`**Average SpO2:** ${day.spo2_percentage.average.toFixed(1)}%`);
   } else {
     lines.push("**Average SpO2:** N/A");
