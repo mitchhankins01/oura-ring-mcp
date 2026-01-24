@@ -34,6 +34,7 @@ src/
 - Data syncs when user opens Oura app - "no data" often means ring hasn't synced
 - Sleep data is attributed to the day you woke up, not when you fell asleep
 - Use Zod for API response validation—define schema once, get types with `z.infer<typeof schema>`
+- Once work has been completed, update CLAUDE.MD accordingly. Conversely, if more work needs to be done at it as well.
 
 ## Development Phases
 
@@ -46,7 +47,7 @@ src/
 - [x] Test with Claude Desktop
 
 ### Phase 2: Cover the API
-- [ ] Generate types from OpenAPI: `npm run generate-types`
+- [x] Generate types from OpenAPI: `pnpm generate-types`
 - [ ] Add remaining endpoints (heart rate, stress, workouts, etc.)
 - [ ] Add MCP resources (`oura://today`, `oura://weekly-summary`)
 - [ ] Better error messages
@@ -142,13 +143,38 @@ See `docs/RESEARCH.md` for detailed inspiration, formulas, and code examples fro
 
 ```bash
 pnpm install          # Install dependencies
-pnpm build        # Compile TypeScript
-pnpm dev          # Watch mode
+pnpm build            # Compile TypeScript
+pnpm dev              # Watch mode
 pnpm start            # Run the server
 
-# Generate OpenAPI types (Phase 2)
-pnpm generate-types
+# OpenAPI & Type Generation
+pnpm update-openapi   # Download latest OpenAPI spec from Oura
+pnpm generate-types   # Generate TypeScript types from spec
+pnpm update-types     # Update spec AND generate types (convenience)
 ```
+
+## Keeping Types Up-to-Date
+
+When Oura updates their API, run:
+
+```bash
+pnpm update-types
+pnpm build
+```
+
+This will:
+1. Scrape the latest OpenAPI spec download link from https://cloud.ouraring.com/v2/docs
+2. Download the spec automatically (currently v1.27)
+3. Generate fresh TypeScript types
+4. Rebuild the project
+
+**How it works**: The script fetches the docs page, extracts the "Download OpenAPI specification" link, and downloads whatever version Oura is currently serving. No manual version updates needed!
+
+**Tip**: Check for API updates:
+- Every few months
+- When Oura announces new features
+- When you see deprecation warnings
+- Before major releases
 
 ## Testing with Claude Desktop
 
@@ -167,6 +193,13 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   }
 }
 ```
+
+**Important Notes**:
+- Replace `/absolute/path/to/oura-mcp` with your actual installation path
+- The MCP SDK requires **Node >=18**. If Claude Desktop is using an older Node version (check logs), specify the full path to a modern Node:
+  ```json
+  "command": "/Users/yourusername/.nvm/versions/node/v24.7.0/bin/node"
+  ```
 
 Then restart Claude Desktop.
 

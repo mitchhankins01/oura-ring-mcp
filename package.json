@@ -12,7 +12,9 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
-    "generate-types": "npx openapi-typescript oura-openapi.json -o src/types/oura-api.ts"
+    "update-openapi": "bash scripts/update-openapi-spec.sh",
+    "generate-types": "npx openapi-typescript oura-openapi.json -o src/types/oura-api.ts",
+    "update-types": "pnpm update-openapi && pnpm generate-types"
   },
   "keywords": [
     "mcp",
@@ -35,6 +37,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
+    "js-yaml": "^4.1.1",
     "openapi-typescript": "^7.10.1",
     "typescript": "^5.9.3"
   }

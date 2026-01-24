@@ -192,19 +192,27 @@ export function registerTools(server: McpServer, client: OuraClient) {
 // ─────────────────────────────────────────────────────────────
 
 function formatSleepSession(session: SleepSession): string {
-  const efficiency = percentage(session.total_sleep_duration, session.time_in_bed);
+  // Handle null values with defaults
+  const totalSleep = session.total_sleep_duration ?? 0;
+  const timeInBed = session.time_in_bed ?? 0;
+  const deepSleep = session.deep_sleep_duration ?? 0;
+  const remSleep = session.rem_sleep_duration ?? 0;
+  const lightSleep = session.light_sleep_duration ?? 0;
+  const awakeTime = session.awake_time ?? 0;
+
+  const efficiency = percentage(totalSleep, timeInBed);
 
   const lines = [
     `## Sleep: ${session.day}`,
     `**Bedtime:** ${formatTime(session.bedtime_start)} → ${formatTime(session.bedtime_end)}`,
-    `**Total Sleep:** ${formatDuration(session.total_sleep_duration)} (of ${formatDuration(session.time_in_bed)} in bed)`,
+    `**Total Sleep:** ${formatDuration(totalSleep)} (of ${formatDuration(timeInBed)} in bed)`,
     `**Efficiency:** ${efficiency}%`,
     "",
     "**Sleep Stages:**",
-    `- Deep: ${formatDuration(session.deep_sleep_duration)} (${percentage(session.deep_sleep_duration, session.total_sleep_duration)}%)`,
-    `- REM: ${formatDuration(session.rem_sleep_duration)} (${percentage(session.rem_sleep_duration, session.total_sleep_duration)}%)`,
-    `- Light: ${formatDuration(session.light_sleep_duration)} (${percentage(session.light_sleep_duration, session.total_sleep_duration)}%)`,
-    `- Awake: ${formatDuration(session.awake_time)}`,
+    `- Deep: ${formatDuration(deepSleep)} (${percentage(deepSleep, totalSleep)}%)`,
+    `- REM: ${formatDuration(remSleep)} (${percentage(remSleep, totalSleep)}%)`,
+    `- Light: ${formatDuration(lightSleep)} (${percentage(lightSleep, totalSleep)}%)`,
+    `- Awake: ${formatDuration(awakeTime)}`,
   ];
 
   // Add biometrics if available

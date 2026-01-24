@@ -20,8 +20,8 @@ Go to [cloud.ouraring.com/personal-access-tokens](https://cloud.ouraring.com/per
 ```bash
 git clone https://github.com/yourusername/oura-mcp.git
 cd oura-mcp
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
 ### 3. Configure Claude Desktop
@@ -32,8 +32,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 {
   "mcpServers": {
     "oura": {
-      "command": "npx",
-      "args": ["node", "/path/to/oura-mcp/dist/index.js"],
+      "command": "node",
+      "args": ["/absolute/path/to/oura-mcp/dist/index.js"],
       "env": {
         "OURA_ACCESS_TOKEN": "your_token_here"
       }
@@ -41,6 +41,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
   }
 }
 ```
+
+**Important**: Replace `/absolute/path/to/oura-mcp` with the actual path to your installation. The MCP SDK requires Node >=18, so make sure Claude Desktop is using a modern Node version.
 
 Restart Claude Desktop.
 
@@ -82,14 +84,58 @@ Once connected, try asking Claude:
 | `get_readiness` | Recovery scores and contributors |
 | `get_activity` | Steps, calories, activity breakdown |
 
+## Development
+
+### Commands
+
+```bash
+pnpm install          # Install dependencies
+pnpm build            # Compile TypeScript
+pnpm dev              # Watch mode for development
+pnpm start            # Run the server
+
+# Type Management
+pnpm update-openapi   # Download latest OpenAPI spec from Oura
+pnpm generate-types   # Generate TypeScript types from spec
+pnpm update-types     # Update spec + generate types (all-in-one)
+```
+
+### Updating API Types
+
+When Oura releases API updates:
+
+```bash
+pnpm update-types
+pnpm build
+```
+
+This automatically scrapes the latest OpenAPI spec from Oura's docs and regenerates TypeScript types. See [CLAUDE.md](CLAUDE.md) for more details.
+
 ## Roadmap
 
-- [ ] More endpoints (heart rate, stress, workouts)
-- [ ] Smart tools (`compare_periods`, `detect_anomalies`, `correlate`)
+**Phase 1: Hello World** ✅
+- [x] Basic MCP server with 3 core tools (sleep, readiness, activity)
+- [x] TypeScript types from OpenAPI spec
+- [x] Automated spec updates
+
+**Phase 2: Cover the API** (In Progress)
+- [ ] More endpoints (heart rate, stress, workouts, SPO2, tags)
 - [ ] MCP resources (`oura://today`, `oura://weekly-summary`)
-- [ ] OAuth CLI flow (`npx oura-mcp auth`) for when PAT deprecated
+- [ ] Better error messages
+
+**Phase 3: Make it Smart**
+- [ ] Derived metrics (sleep debt, rolling averages, trends)
+- [ ] Smart analysis tools (`compare_periods`, `detect_anomalies`, `correlate`)
+- [ ] HRV analysis (time/frequency domain, Poincaré plots)
+
+**Phase 4: Ship It**
+- [ ] OAuth CLI flow (`npx oura-mcp auth`)
 - [ ] Publish to npm
 - [ ] HTTP transport for remote/mobile access
+
+## Contributing
+
+See [CLAUDE.md](CLAUDE.md) for architecture details and development phases.
 
 ## License
 
