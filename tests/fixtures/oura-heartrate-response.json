@@ -1,0 +1,35 @@
+{
+  "data": [
+    {
+      "bpm": 55,
+      "source": "sleep",
+      "timestamp": "2024-01-15T02:30:00+00:00"
+    },
+    {
+      "bpm": 52,
+      "source": "sleep",
+      "timestamp": "2024-01-15T03:30:00+00:00"
+    },
+    {
+      "bpm": 58,
+      "source": "sleep",
+      "timestamp": "2024-01-15T04:30:00+00:00"
+    },
+    {
+      "bpm": 72,
+      "source": "awake",
+      "timestamp": "2024-01-15T08:00:00+00:00"
+    },
+    {
+      "bpm": 85,
+      "source": "awake",
+      "timestamp": "2024-01-15T09:00:00+00:00"
+    },
+    {
+      "bpm": 120,
+      "source": "workout",
+      "timestamp": "2024-01-15T10:00:00+00:00"
+    }
+  ],
+  "next_token": null
+}

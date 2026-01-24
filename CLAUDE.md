@@ -78,9 +78,10 @@ src/
 - [x] Set up Vitest with coverage thresholds (75/80/80/80)
 - [x] Create test infrastructure (fixtures, helpers directories)
 - [x] Write comprehensive tests for formatters (96%+ coverage achieved)
-- [ ] Add tests for Oura client (mocked fetch)
-- [ ] Add tests for tool handlers (mocked client)
-- [ ] Add tests for MCP server (mocked SDK)
+- [x] Add tests for Oura client (mocked fetch) - 19 tests
+- [x] Add tests for tool handlers (mocked client) - 55 tests
+- [x] Add tests for MCP server (mocked SDK) - 8 tests
+- [ ] Compare fixtures against actual api calls to verify
 - [ ] Set up CI/CD for automated testing (GitHub Actions)
 - [ ] Add pre-commit hooks for test validation
 

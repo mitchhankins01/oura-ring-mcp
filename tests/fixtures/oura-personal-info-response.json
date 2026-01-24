@@ -1,0 +1,8 @@
+{
+  "id": "user-123",
+  "age": 35,
+  "weight": 75,
+  "height": 180,
+  "biological_sex": "male",
+  "email": "test@example.com"
+}

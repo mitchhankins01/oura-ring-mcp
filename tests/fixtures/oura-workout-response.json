@@ -1,0 +1,17 @@
+{
+  "data": [
+    {
+      "id": "workout-123",
+      "day": "2024-01-15",
+      "activity": "running",
+      "label": "Morning Run",
+      "start_datetime": "2024-01-15T07:00:00+00:00",
+      "end_datetime": "2024-01-15T07:45:00+00:00",
+      "intensity": "moderate",
+      "calories": 350,
+      "distance": 5200,
+      "source": "manual"
+    }
+  ],
+  "next_token": null
+}

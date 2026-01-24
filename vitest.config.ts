@@ -14,7 +14,10 @@ export default defineConfig({
         '**/*.test.ts',
         '**/*.spec.ts',
         'scripts/**',
-        'vitest.config.ts'
+        'vitest.config.ts',
+        'tests/fixtures/**',   // Test fixtures (JSON)
+        'tests/helpers/**',    // Test helpers
+        'src/utils/index.ts',  // Re-export file
       ],
       thresholds: {
         branches: 75,

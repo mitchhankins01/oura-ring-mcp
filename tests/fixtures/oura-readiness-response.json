@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "id": "readiness-123",
+      "day": "2024-01-15",
+      "score": 82,
+      "temperature_deviation": -0.2,
+      "temperature_trend_deviation": 0.1,
+      "contributors": {
+        "activity_balance": 85,
+        "body_temperature": 90,
+        "hrv_balance": 78,
+        "previous_day_activity": 88,
+        "previous_night": 80,
+        "recovery_index": 75,
+        "resting_heart_rate": 82,
+        "sleep_balance": 79
+      }
+    }
+  ],
+  "next_token": null
+}

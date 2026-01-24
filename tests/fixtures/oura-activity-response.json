@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "id": "activity-123",
+      "day": "2024-01-15",
+      "score": 88,
+      "active_calories": 450,
+      "total_calories": 2200,
+      "steps": 8500,
+      "equivalent_walking_distance": 6800,
+      "high_activity_time": 1800,
+      "medium_activity_time": 3600,
+      "low_activity_time": 7200,
+      "sedentary_time": 28800,
+      "resting_time": 25200,
+      "inactivity_alerts": 2,
+      "target_calories": 500,
+      "target_meters": 7000,
+      "class_5_min": "0011100022222222233333344444444444444443333333332222222222222222111111111110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "next_token": null
+}
