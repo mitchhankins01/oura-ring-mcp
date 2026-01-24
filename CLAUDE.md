@@ -28,22 +28,28 @@ src/
     └── formatters.ts  # Human-readable formatting (seconds→hours, etc.)
 ```
 
-## Current Tools (9 available)
+## Current Tools (13 available)
 
 **Sleep & Recovery:**
 - `get_sleep` - Detailed sleep sessions with stages, efficiency, HR, HRV
 - `get_daily_sleep` - Daily sleep scores with contributors
 - `get_readiness` - Daily readiness scores and recovery metrics
+- `get_resilience` - Body's capacity to recover from stress
 
 **Activity & Fitness:**
 - `get_activity` - Daily activity, steps, calories, intensity breakdown
 - `get_workouts` - Workout sessions with type, duration, intensity
 - `get_vo2_max` - Cardiorespiratory fitness measurements
+- `get_sessions` - Meditation, breathing, and relaxation sessions
 
 **Health Metrics:**
 - `get_stress` - Stress levels and recovery time
 - `get_heart_rate` - Individual HR readings throughout the day
 - `get_spo2` - Blood oxygen saturation and breathing disturbance
+- `get_cardiovascular_age` - Estimated vascular age based on heart health
+
+**User Data:**
+- `get_tags` - User-created tags and notes for tracking lifestyle factors
 
 ## Notes
 
@@ -72,18 +78,22 @@ src/
   - [x] `get_workouts` - Workout sessions with activity type and intensity
   - [x] `get_spo2` - Blood oxygen saturation and breathing disturbance index
   - [x] `get_vo2_max` - Cardiorespiratory fitness measurements
-- [ ] Add remaining endpoints (resilience, cardiovascular age, tags, sessions, etc.)
+- [x] Add remaining endpoints:
+  - [x] `get_resilience` - Body's capacity to recover from stress
+  - [x] `get_cardiovascular_age` - Estimated vascular age
+  - [x] `get_tags` - User-created tags and notes
+  - [x] `get_sessions` - Meditation/breathing sessions
 - [ ] Add MCP resources (`oura://today`, `oura://weekly-summary`)
 - [ ] Better error messages
 - [x] Set up Vitest with coverage thresholds (75/80/80/80)
 - [x] Create test infrastructure (fixtures, helpers directories)
 - [x] Write comprehensive tests for formatters (96%+ coverage achieved)
-- [x] Add tests for Oura client (mocked fetch) - 19 tests
-- [x] Add tests for tool handlers (mocked client) - 55 tests
+- [x] Add tests for Oura client (mocked fetch) - 23 tests
+- [x] Add tests for tool handlers (mocked client) - 74 tests
 - [x] Add tests for MCP server (mocked SDK) - 8 tests
-- [ ] Compare fixtures against actual api calls to verify
-- [ ] Set up CI/CD for automated testing (GitHub Actions)
-- [ ] Add pre-commit hooks for test validation
+- [ ] Compare fixtures against actual API calls to verify
+- [x] Set up CI/CD for automated testing (GitHub Actions)
+- [x] Add pre-commit hooks for test validation (husky)
 
 ### Phase 3: Make it Smart
 See `docs/RESEARCH.md` for detailed inspiration, formulas, and code examples from Wearipedia notebook.
@@ -99,6 +109,7 @@ See `docs/RESEARCH.md` for detailed inspiration, formulas, and code examples fro
 - [ ] Sleep regularity score (consistency of bed/wake times)
 - [ ] Day-of-week patterns ("I sleep worst on Fridays")
 - [ ] Dispersion analysis (coefficient of variation)
+
 
 **HRV-specific features (from hrvanalysis library):**
 - [ ] Time domain: SDNN, RMSSD, pNN50, CVSD

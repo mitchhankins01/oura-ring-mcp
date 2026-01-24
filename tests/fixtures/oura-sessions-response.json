@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "id": "session-001",
+      "day": "2024-01-15",
+      "start_datetime": "2024-01-15T08:00:00+00:00",
+      "end_datetime": "2024-01-15T08:15:00+00:00",
+      "type": "meditation",
+      "heart_rate": {
+        "interval": 5,
+        "items": [62, 60, 58, 57, 56],
+        "timestamp": "2024-01-15T08:00:00+00:00"
+      },
+      "heart_rate_variability": {
+        "interval": 5,
+        "items": [45, 48, 52, 55, 58],
+        "timestamp": "2024-01-15T08:00:00+00:00"
+      },
+      "mood": "good",
+      "motion_count": null
+    }
+  ],
+  "next_token": null
+}

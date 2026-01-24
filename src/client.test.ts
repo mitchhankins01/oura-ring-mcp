@@ -16,6 +16,10 @@ import heartrateResponse from "../tests/fixtures/oura-heartrate-response.json" w
 import workoutResponse from "../tests/fixtures/oura-workout-response.json" with { type: "json" };
 import spo2Response from "../tests/fixtures/oura-spo2-response.json" with { type: "json" };
 import vo2maxResponse from "../tests/fixtures/oura-vo2max-response.json" with { type: "json" };
+import resilienceResponse from "../tests/fixtures/oura-resilience-response.json" with { type: "json" };
+import cardiovascularAgeResponse from "../tests/fixtures/oura-cardiovascular-age-response.json" with { type: "json" };
+import tagsResponse from "../tests/fixtures/oura-tags-response.json" with { type: "json" };
+import sessionsResponse from "../tests/fixtures/oura-sessions-response.json" with { type: "json" };
 import personalInfoResponse from "../tests/fixtures/oura-personal-info-response.json" with { type: "json" };
 
 const TEST_TOKEN = "test-access-token-123";
@@ -28,7 +32,7 @@ describe("OuraClient", () => {
   beforeEach(() => {
     client = new OuraClient({ accessToken: TEST_TOKEN });
     mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as typeof fetch;
   });
 
   afterEach(() => {
@@ -306,6 +310,81 @@ describe("OuraClient", () => {
 
       const calledUrl = mockFetch.mock.calls[0][0];
       expect(calledUrl).toContain(`${BASE_URL}/vO2_max`);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Resilience endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  describe("getDailyResilience", () => {
+    it("should fetch resilience data", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(resilienceResponse),
+      });
+
+      const result = await client.getDailyResilience("2024-01-15", "2024-01-15");
+
+      expect(result).toEqual(resilienceResponse);
+      expect(result.data[0].level).toBe("solid");
+      expect(result.data[0].contributors.sleep_recovery).toBe(85);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Cardiovascular age endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  describe("getDailyCardiovascularAge", () => {
+    it("should fetch cardiovascular age data", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(cardiovascularAgeResponse),
+      });
+
+      const result = await client.getDailyCardiovascularAge("2024-01-15", "2024-01-15");
+
+      expect(result).toEqual(cardiovascularAgeResponse);
+      expect(result.data[0].vascular_age).toBe(35);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Tags endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  describe("getTags", () => {
+    it("should fetch tags data", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(tagsResponse),
+      });
+
+      const result = await client.getTags("2024-01-15", "2024-01-15");
+
+      expect(result).toEqual(tagsResponse);
+      expect(result.data[0].text).toBe("Had coffee after 2pm");
+      expect(result.data[0].tags).toContain("caffeine");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Sessions endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  describe("getSessions", () => {
+    it("should fetch sessions data", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(sessionsResponse),
+      });
+
+      const result = await client.getSessions("2024-01-15", "2024-01-15");
+
+      expect(result).toEqual(sessionsResponse);
+      expect(result.data[0].type).toBe("meditation");
+      expect(result.data[0].mood).toBe("good");
     });
   });
 

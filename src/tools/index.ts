@@ -17,6 +17,10 @@ import {
   Workout,
   DailySpo2,
   VO2Max,
+  DailyResilience,
+  DailyCardiovascularAge,
+  Tag,
+  Session,
 } from "../client.js";
 import {
   formatDuration,
@@ -551,6 +555,222 @@ export function registerTools(server: McpServer, client: OuraClient) {
       }
     }
   );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_resilience tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_resilience",
+    {
+      description:
+        "Get daily resilience scores showing your body's capacity to recover from stress. Includes sleep recovery, daytime recovery, and stress contributors. Resilience levels range from limited to exceptional.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
+
+        const response = await client.getDailyResilience(startDate, endDate);
+
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No resilience data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((day) => formatResilience(day));
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching resilience data: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_cardiovascular_age tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_cardiovascular_age",
+    {
+      description:
+        "Get your estimated cardiovascular (vascular) age based on heart health metrics. Compare your vascular age to your actual age to understand your cardiovascular health.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
+
+        const response = await client.getDailyCardiovascularAge(startDate, endDate);
+
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No cardiovascular age data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Note: This feature requires sufficient data and may not be available for all users.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((day) => formatCardiovascularAge(day));
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching cardiovascular age data: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_tags tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_tags",
+    {
+      description:
+        "Get user-created tags and notes. Tags help track lifestyle factors like caffeine, alcohol, meals, or custom notes that may affect sleep and recovery.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
+
+        const response = await client.getTags(startDate, endDate);
+
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No tags found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Tags are user-created notes in the Oura app.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((tag) => formatTag(tag));
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching tags: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_sessions tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_sessions",
+    {
+      description:
+        "Get meditation, breathing, and relaxation sessions recorded with Oura. Includes session type, duration, and biometrics like heart rate and HRV during the session.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
+
+        const response = await client.getSessions(startDate, endDate);
+
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No sessions found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Sessions include meditation and breathing exercises done through the Oura app.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((session) => formatSession(session));
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Error fetching sessions: ${error instanceof Error ? error.message : "Unknown error"}`,
+            },
+          ],
+        };
+      }
+    }
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -778,6 +998,96 @@ function formatVO2Max(measurement: VO2Max): string {
   }
 
   lines.push(`**Measured:** ${formatTime(measurement.timestamp)}`);
+
+  return lines.join("\n");
+}
+
+function formatResilience(day: DailyResilience): string {
+  const c = day.contributors;
+  const levelLabel = day.level.charAt(0).toUpperCase() + day.level.slice(1);
+
+  return [
+    `## Resilience: ${day.day}`,
+    `**Level:** ${levelLabel}`,
+    "",
+    "**Contributors:**",
+    `- Sleep Recovery: ${c.sleep_recovery}`,
+    `- Daytime Recovery: ${c.daytime_recovery}`,
+    `- Stress: ${c.stress}`,
+  ].join("\n");
+}
+
+function formatCardiovascularAge(day: DailyCardiovascularAge): string {
+  const lines = [
+    `## Cardiovascular Age: ${day.day}`,
+  ];
+
+  if (day.vascular_age !== null) {
+    lines.push(`**Vascular Age:** ${day.vascular_age} years`);
+  } else {
+    lines.push("**Vascular Age:** N/A");
+  }
+
+  return lines.join("\n");
+}
+
+function formatTag(tag: Tag): string {
+  const lines = [
+    `## Tag: ${tag.day}`,
+    `**Time:** ${formatTime(tag.timestamp)}`,
+  ];
+
+  if (tag.tags && tag.tags.length > 0) {
+    lines.push(`**Tags:** ${tag.tags.join(", ")}`);
+  }
+
+  if (tag.text) {
+    lines.push(`**Note:** ${tag.text}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatSession(session: Session): string {
+  const typeLabel = session.type.charAt(0).toUpperCase() + session.type.slice(1).replace(/_/g, " ");
+
+  const lines = [
+    `## ${typeLabel} Session: ${session.day}`,
+    `**Time:** ${formatTime(session.start_datetime)} → ${formatTime(session.end_datetime)}`,
+  ];
+
+  if (session.mood) {
+    const moodLabel = session.mood.charAt(0).toUpperCase() + session.mood.slice(1);
+    lines.push(`**Mood:** ${moodLabel}`);
+  }
+
+  // Add biometrics if available
+  if (session.heart_rate || session.heart_rate_variability) {
+    lines.push("");
+    lines.push("**Biometrics:**");
+
+    if (session.heart_rate) {
+      const hrItems = session.heart_rate.items || [];
+      if (hrItems.length > 0) {
+        const validHr = hrItems.filter((hr): hr is number => hr !== null);
+        if (validHr.length > 0) {
+          const avgHr = Math.round(validHr.reduce((a, b) => a + b, 0) / validHr.length);
+          lines.push(`- Avg Heart Rate: ${avgHr} bpm`);
+        }
+      }
+    }
+
+    if (session.heart_rate_variability) {
+      const hrvItems = session.heart_rate_variability.items || [];
+      if (hrvItems.length > 0) {
+        const validHrv = hrvItems.filter((hrv): hrv is number => hrv !== null);
+        if (validHrv.length > 0) {
+          const avgHrv = Math.round(validHrv.reduce((a, b) => a + b, 0) / validHrv.length);
+          lines.push(`- Avg HRV: ${avgHrv} ms`);
+        }
+      }
+    }
+  }
 
   return lines.join("\n");
 }

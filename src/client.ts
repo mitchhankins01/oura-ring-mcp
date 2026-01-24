@@ -18,6 +18,10 @@ export type Workout = components["schemas"]["PublicWorkout"];
 export type DailySpo2 = components["schemas"]["DailySpO2Model"];
 export type VO2Max = components["schemas"]["VO2MaxModel"];
 export type PersonalInfo = components["schemas"]["PersonalInfoResponse"];
+export type DailyResilience = components["schemas"]["DailyResilienceModel"];
+export type DailyCardiovascularAge = components["schemas"]["DailyCardiovascularAgeModel"];
+export type Tag = components["schemas"]["TagModel"];
+export type Session = components["schemas"]["SessionModel"];
 
 export interface OuraClientConfig {
   accessToken: string;
@@ -158,7 +162,51 @@ export class OuraClient {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // Other endpoints (add as needed)
+  // Resilience endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  async getDailyResilience(startDate: string, endDate: string) {
+    return this.fetch<OuraResponse<DailyResilience>>("daily_resilience", {
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Cardiovascular age endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  async getDailyCardiovascularAge(startDate: string, endDate: string) {
+    return this.fetch<OuraResponse<DailyCardiovascularAge>>("daily_cardiovascular_age", {
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Tag endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  async getTags(startDate: string, endDate: string) {
+    return this.fetch<OuraResponse<Tag>>("tag", {
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Session endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  async getSessions(startDate: string, endDate: string) {
+    return this.fetch<OuraResponse<Session>>("session", {
+      start_date: startDate,
+      end_date: endDate,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Other endpoints
   // ─────────────────────────────────────────────────────────────
 
   async getPersonalInfo() {

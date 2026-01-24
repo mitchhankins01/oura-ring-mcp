@@ -17,6 +17,10 @@ import heartrateResponse from "../../tests/fixtures/oura-heartrate-response.json
 import workoutResponse from "../../tests/fixtures/oura-workout-response.json" with { type: "json" };
 import spo2Response from "../../tests/fixtures/oura-spo2-response.json" with { type: "json" };
 import vo2maxResponse from "../../tests/fixtures/oura-vo2max-response.json" with { type: "json" };
+import resilienceResponse from "../../tests/fixtures/oura-resilience-response.json" with { type: "json" };
+import cardiovascularAgeResponse from "../../tests/fixtures/oura-cardiovascular-age-response.json" with { type: "json" };
+import tagsResponse from "../../tests/fixtures/oura-tags-response.json" with { type: "json" };
+import sessionsResponse from "../../tests/fixtures/oura-sessions-response.json" with { type: "json" };
 
 // Type for captured tool handlers
 type ToolHandler = (args: Record<string, unknown>) => Promise<{
@@ -50,6 +54,10 @@ function createMockClient(overrides: Partial<Record<keyof OuraClient, unknown>> 
     getWorkouts: vi.fn().mockResolvedValue(workoutResponse),
     getDailySpo2: vi.fn().mockResolvedValue(spo2Response),
     getVO2Max: vi.fn().mockResolvedValue(vo2maxResponse),
+    getDailyResilience: vi.fn().mockResolvedValue(resilienceResponse),
+    getDailyCardiovascularAge: vi.fn().mockResolvedValue(cardiovascularAgeResponse),
+    getTags: vi.fn().mockResolvedValue(tagsResponse),
+    getSessions: vi.fn().mockResolvedValue(sessionsResponse),
     getPersonalInfo: vi.fn().mockResolvedValue({}),
     ...overrides,
   } as unknown as OuraClient;
@@ -80,8 +88,8 @@ describe("Tool Handlers", () => {
   // ─────────────────────────────────────────────────────────────
 
   describe("registerTools", () => {
-    it("should register all 9 tools", () => {
-      expect(mockServer.getToolCount()).toBe(9);
+    it("should register all 13 tools", () => {
+      expect(mockServer.getToolCount()).toBe(13);
     });
 
     it("should register expected tool names", () => {
@@ -95,6 +103,10 @@ describe("Tool Handlers", () => {
         "get_workouts",
         "get_spo2",
         "get_vo2_max",
+        "get_resilience",
+        "get_cardiovascular_age",
+        "get_tags",
+        "get_sessions",
       ];
 
       expectedTools.forEach((toolName) => {
@@ -736,6 +748,247 @@ describe("Tool Handlers", () => {
       const result = await handler({});
 
       expect(result.content[0].text).toContain("Error fetching VO2 max data");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // get_resilience tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("get_resilience", () => {
+    it("should return formatted resilience data", async () => {
+      const handler = mockServer.getToolHandler("get_resilience")!;
+      const result = await handler({ start_date: "2024-01-15" });
+
+      expect(result.content[0].text).toContain("## Resilience: 2024-01-15");
+      expect(result.content[0].text).toContain("**Level:** Solid");
+    });
+
+    it("should show all contributors", async () => {
+      const handler = mockServer.getToolHandler("get_resilience")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("- Sleep Recovery: 85");
+      expect(result.content[0].text).toContain("- Daytime Recovery: 72");
+      expect(result.content[0].text).toContain("- Stress: 68");
+    });
+
+    it("should handle empty response", async () => {
+      mockClient = createMockClient({ getDailyResilience: vi.fn().mockResolvedValue(emptyResponse) });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_resilience")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("No resilience data found");
+    });
+
+    it("should handle errors", async () => {
+      mockClient = createMockClient({
+        getDailyResilience: vi.fn().mockRejectedValue(new Error("Resilience API error")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_resilience")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Error fetching resilience data");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // get_cardiovascular_age tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("get_cardiovascular_age", () => {
+    it("should return formatted cardiovascular age data", async () => {
+      const handler = mockServer.getToolHandler("get_cardiovascular_age")!;
+      const result = await handler({ start_date: "2024-01-15" });
+
+      expect(result.content[0].text).toContain("## Cardiovascular Age: 2024-01-15");
+      expect(result.content[0].text).toContain("**Vascular Age:** 35 years");
+    });
+
+    it("should handle null vascular age", async () => {
+      mockClient = createMockClient({
+        getDailyCardiovascularAge: vi.fn().mockResolvedValue({
+          data: [{ day: "2024-01-15", vascular_age: null }],
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_cardiovascular_age")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("**Vascular Age:** N/A");
+    });
+
+    it("should handle empty response", async () => {
+      mockClient = createMockClient({ getDailyCardiovascularAge: vi.fn().mockResolvedValue(emptyResponse) });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_cardiovascular_age")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("No cardiovascular age data found");
+    });
+
+    it("should handle errors", async () => {
+      mockClient = createMockClient({
+        getDailyCardiovascularAge: vi.fn().mockRejectedValue(new Error("Cardiovascular age API error")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_cardiovascular_age")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Error fetching cardiovascular age data");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // get_tags tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("get_tags", () => {
+    it("should return formatted tag data", async () => {
+      const handler = mockServer.getToolHandler("get_tags")!;
+      const result = await handler({ start_date: "2024-01-15" });
+
+      expect(result.content[0].text).toContain("## Tag: 2024-01-15");
+      expect(result.content[0].text).toContain("**Time:**");
+    });
+
+    it("should show tags and notes", async () => {
+      const handler = mockServer.getToolHandler("get_tags")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("**Tags:** caffeine, afternoon");
+      expect(result.content[0].text).toContain("**Note:** Had coffee after 2pm");
+    });
+
+    it("should handle tag without text", async () => {
+      mockClient = createMockClient({
+        getTags: vi.fn().mockResolvedValue({
+          data: [{
+            id: "tag-002",
+            day: "2024-01-15",
+            text: null,
+            timestamp: "2024-01-15T10:00:00+00:00",
+            tags: ["exercise"],
+          }],
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_tags")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("**Tags:** exercise");
+      expect(result.content[0].text).not.toContain("**Note:**");
+    });
+
+    it("should handle empty response", async () => {
+      mockClient = createMockClient({ getTags: vi.fn().mockResolvedValue(emptyResponse) });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_tags")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("No tags found");
+    });
+
+    it("should handle errors", async () => {
+      mockClient = createMockClient({
+        getTags: vi.fn().mockRejectedValue(new Error("Tags API error")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_tags")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Error fetching tags");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // get_sessions tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("get_sessions", () => {
+    it("should return formatted session data", async () => {
+      const handler = mockServer.getToolHandler("get_sessions")!;
+      const result = await handler({ start_date: "2024-01-15" });
+
+      expect(result.content[0].text).toContain("## Meditation Session: 2024-01-15");
+      expect(result.content[0].text).toContain("**Time:**");
+    });
+
+    it("should show mood when available", async () => {
+      const handler = mockServer.getToolHandler("get_sessions")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("**Mood:** Good");
+    });
+
+    it("should show biometrics when available", async () => {
+      const handler = mockServer.getToolHandler("get_sessions")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("**Biometrics:**");
+      expect(result.content[0].text).toContain("- Avg Heart Rate:");
+      expect(result.content[0].text).toContain("- Avg HRV:");
+    });
+
+    it("should handle session without biometrics", async () => {
+      mockClient = createMockClient({
+        getSessions: vi.fn().mockResolvedValue({
+          data: [{
+            id: "session-002",
+            day: "2024-01-15",
+            start_datetime: "2024-01-15T12:00:00+00:00",
+            end_datetime: "2024-01-15T12:10:00+00:00",
+            type: "breathing",
+            heart_rate: null,
+            heart_rate_variability: null,
+            mood: null,
+            motion_count: null,
+          }],
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_sessions")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("## Breathing Session: 2024-01-15");
+      expect(result.content[0].text).not.toContain("**Mood:**");
+      expect(result.content[0].text).not.toContain("**Biometrics:**");
+    });
+
+    it("should handle empty response", async () => {
+      mockClient = createMockClient({ getSessions: vi.fn().mockResolvedValue(emptyResponse) });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_sessions")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("No sessions found");
+    });
+
+    it("should handle errors", async () => {
+      mockClient = createMockClient({
+        getSessions: vi.fn().mockRejectedValue(new Error("Sessions API error")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_sessions")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Error fetching sessions");
     });
   });
 
