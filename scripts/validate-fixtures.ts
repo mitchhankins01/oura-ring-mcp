@@ -22,9 +22,9 @@ if (!token) {
   process.exit(1);
 }
 
-// Get today and 1 year ago for date range
+// Get today and earliest possible date for full history
 const today = new Date().toISOString().split("T")[0];
-const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+const allTime = "2015-01-01"; // Oura Gen 1 launched in 2015
 
 interface EndpointConfig {
   endpoint: string;
@@ -33,19 +33,19 @@ interface EndpointConfig {
 }
 
 const endpoints: EndpointConfig[] = [
-  { endpoint: "sleep", fixture: "oura-sleep-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "daily_sleep", fixture: "oura-daily-sleep-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "daily_readiness", fixture: "oura-readiness-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "daily_activity", fixture: "oura-activity-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "daily_stress", fixture: "oura-stress-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "heartrate", fixture: "oura-heartrate-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "workout", fixture: "oura-workout-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "daily_spo2", fixture: "oura-spo2-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "vO2_max", fixture: "oura-vo2max-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "daily_resilience", fixture: "oura-resilience-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "daily_cardiovascular_age", fixture: "oura-cardiovascular-age-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "tag", fixture: "oura-tags-response.json", params: { start_date: yearAgo, end_date: today } },
-  { endpoint: "session", fixture: "oura-sessions-response.json", params: { start_date: yearAgo, end_date: today } },
+  { endpoint: "sleep", fixture: "oura-sleep-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "daily_sleep", fixture: "oura-daily-sleep-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "daily_readiness", fixture: "oura-readiness-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "daily_activity", fixture: "oura-activity-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "daily_stress", fixture: "oura-stress-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "heartrate", fixture: "oura-heartrate-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "workout", fixture: "oura-workout-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "daily_spo2", fixture: "oura-spo2-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "vO2_max", fixture: "oura-vo2max-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "daily_resilience", fixture: "oura-resilience-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "daily_cardiovascular_age", fixture: "oura-cardiovascular-age-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "tag", fixture: "oura-tags-response.json", params: { start_date: allTime, end_date: today } },
+  { endpoint: "session", fixture: "oura-sessions-response.json", params: { start_date: allTime, end_date: today } },
   { endpoint: "personal_info", fixture: "oura-personal-info-response.json" },
 ];
 
@@ -155,7 +155,7 @@ async function validateFixture(config: EndpointConfig): Promise<void> {
 async function main() {
   console.log("Oura API Fixture Validator");
   console.log("==========================");
-  console.log(`Date range: ${yearAgo} to ${today}\n`);
+  console.log(`Date range: ${allTime} to ${today}\n`);
 
   for (const config of endpoints) {
     await validateFixture(config);

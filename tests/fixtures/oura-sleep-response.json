@@ -14,12 +14,18 @@
       "deep_sleep_duration": 7200,
       "average_heart_rate": 55,
       "average_hrv": 65,
+      "average_breath": 14.5,
       "lowest_heart_rate": 48,
       "restless_periods": 3,
       "sleep_score_delta": 0,
       "sleep_algorithm_version": "v2",
       "latency": 600,
       "type": "long_sleep",
+      "period": 0,
+      "low_battery_alert": false,
+      "readiness_score_delta": null,
+      "sleep_analysis_reason": null,
+      "ring_id": null,
       "heart_rate": {
         "interval": 300,
         "items": [58, 56, 54, 52, 50, 48, 50, 52, 54, 56],
@@ -46,7 +52,9 @@
         "temperature_trend_deviation": 0.1
       },
       "movement_30_sec": "111111111122222222223333333333222222222211111111111111111111222222222233333333332222222222111111111100000000001111111111",
-      "sleep_phase_5_min": "4444333322221111222233334444333322221111"
+      "sleep_phase_5_min": "4444333322221111222233334444333322221111",
+      "sleep_phase_30_sec": "444444443333333322222222111111112222222233333333444444443333333322222222111111110000000011111111",
+      "app_sleep_phase_5_min": "4444333322221111222233334444333322221111"
     }
   ],
   "next_token": null
