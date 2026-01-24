@@ -1,7 +1,5 @@
 # Oura MCP Server
 
-[![CI](https://github.com/mitchhankins01/oura-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mitchhankins01/oura-mcp/actions/workflows/ci.yml)
-
 An MCP (Model Context Protocol) server that exposes Oura Ring health data to LLMs like Claude. Built for learning MCP development while creating something genuinely useful.
 
 ## Project Goals

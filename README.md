@@ -1,5 +1,7 @@
 # 🌙 Oura MCP Server
 
+[![CI](https://github.com/mitchhankins01/oura-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mitchhankins01/oura-mcp/actions/workflows/ci.yml)
+
 An MCP server that connects your Oura Ring to Claude and other AI assistants. Get human-readable insights about your sleep, readiness, and activity—not just raw JSON.
 
 ## Features
