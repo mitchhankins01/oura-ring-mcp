@@ -15,13 +15,38 @@
       "average_heart_rate": 55,
       "average_hrv": 65,
       "lowest_heart_rate": 48,
-      "rmssd": 52,
       "restless_periods": 3,
       "sleep_score_delta": 0,
       "sleep_algorithm_version": "v2",
       "latency": 600,
-      "timing": 85,
-      "type": "long_sleep"
+      "type": "long_sleep",
+      "heart_rate": {
+        "interval": 300,
+        "items": [58, 56, 54, 52, 50, 48, 50, 52, 54, 56],
+        "timestamp": "2024-01-14T23:30:00+00:00"
+      },
+      "hrv": {
+        "interval": 300,
+        "items": [45, 52, 58, 62, 65, 68, 65, 60, 55, 50],
+        "timestamp": "2024-01-14T23:30:00+00:00"
+      },
+      "readiness": {
+        "contributors": {
+          "activity_balance": 85,
+          "body_temperature": 90,
+          "hrv_balance": 78,
+          "previous_day_activity": 88,
+          "previous_night": 80,
+          "recovery_index": 75,
+          "resting_heart_rate": 82,
+          "sleep_balance": 79
+        },
+        "score": 82,
+        "temperature_deviation": -0.2,
+        "temperature_trend_deviation": 0.1
+      },
+      "movement_30_sec": "111111111122222222223333333333222222222211111111111111111111222222222233333333332222222222111111111100000000001111111111",
+      "sleep_phase_5_min": "4444333322221111222233334444333322221111"
     }
   ],
   "next_token": null

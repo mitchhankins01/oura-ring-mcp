@@ -26,6 +26,9 @@ src/
 │   └── http.ts        # HTTP/SSE for remote access
 └── utils/
     └── formatters.ts  # Human-readable formatting (seconds→hours, etc.)
+
+scripts/
+└── validate-fixtures.ts  # Compare test fixtures against real Oura API
 ```
 
 ## Current Tools (13 available)
@@ -91,7 +94,7 @@ src/
 - [x] Add tests for Oura client (mocked fetch) - 23 tests
 - [x] Add tests for tool handlers (mocked client) - 74 tests
 - [x] Add tests for MCP server (mocked SDK) - 8 tests
-- [ ] Compare fixtures against actual API calls to verify
+- [x] Validate fixtures against real API (scripts/validate-fixtures.ts)
 - [x] Set up CI/CD for automated testing (GitHub Actions)
 - [x] Add pre-commit hooks for test validation (husky)
 
@@ -160,6 +163,7 @@ See `docs/RESEARCH.md` for detailed inspiration, formulas, and code examples fro
 - `src/client.ts` - Oura API client with TypeScript types
 - `src/tools/index.ts` - Tool definitions (schemas) and handlers
 - `src/utils/formatters.ts` - Convert seconds to hours, format scores, etc.
+- `scripts/validate-fixtures.ts` - Validate test fixtures against real Oura API
 - `docs/RESEARCH.md` - **Competitive analysis, derived metrics formulas, Phase 3 inspiration**
 
 ## Reference Materials
@@ -202,6 +206,9 @@ pnpm test:ui          # Open Vitest UI in browser
 pnpm update-openapi   # Download latest OpenAPI spec from Oura
 pnpm generate-types   # Generate TypeScript types from spec
 pnpm update-types     # Update spec AND generate types (convenience)
+
+# Fixture Validation
+OURA_ACCESS_TOKEN=your_token npx ts-node scripts/validate-fixtures.ts  # Compare fixtures to real API
 ```
 
 ## Testing Strategy
