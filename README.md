@@ -10,6 +10,9 @@ An MCP server that connects your Oura Ring to Claude and other AI assistants. Ge
 - **Sleep analysis** - Sleep stages, efficiency, HRV, and biometrics
 - **Readiness tracking** - Recovery scores and contributor breakdown
 - **Activity data** - Steps, calories, and intensity breakdown
+- **Health metrics** - Heart rate, SpO2, stress, cardiovascular age
+- **Workouts & sessions** - Exercise and meditation tracking
+- **Tags support** - Custom user tags and notes
 
 ## Quick Start
 
@@ -82,15 +85,27 @@ Once connected, try asking Claude:
 
 | Tool | Description |
 |------|-------------|
-| `get_sleep` | Detailed sleep sessions with stages, efficiency, HR, HRV |
+| `get_sleep` | Complete sleep data with stages, efficiency, HR, HRV |
 | `get_daily_sleep` | Daily sleep scores with contributors |
 | `get_readiness` | Daily readiness scores and recovery metrics |
+| `get_resilience` | Body's capacity to recover from stress |
 | `get_activity` | Daily activity, steps, calories, intensity breakdown |
 | `get_workouts` | Workout sessions with type, duration, intensity |
+| `get_sessions` | Meditation, breathing, and relaxation sessions |
+| `get_vo2_max` | Cardiorespiratory fitness measurements |
 | `get_stress` | Stress levels and recovery time |
 | `get_heart_rate` | Individual HR readings throughout the day |
 | `get_spo2` | Blood oxygen saturation and breathing disturbance |
-| `get_vo2_max` | Cardiorespiratory fitness measurements |
+| `get_cardiovascular_age` | Estimated vascular age based on heart health |
+| `get_tags` | User-created tags and notes |
+| `get_enhanced_tags` | Rich tags with custom names and types |
+
+## MCP Resources
+
+| Resource | Description |
+|----------|-------------|
+| `oura://today` | Today's health summary (sleep, readiness, activity, stress) |
+| `oura://weekly-summary` | Last 7 days summary with averages and trends |
 
 ## Development
 
@@ -126,12 +141,12 @@ This automatically scrapes the latest OpenAPI spec from Oura's docs and regenera
 - [x] TypeScript types from OpenAPI spec
 - [x] Automated spec updates
 
-**Phase 2: Cover the API** (In Progress)
+**Phase 2: Cover the API** ✅
 - [x] More endpoints (heart rate, stress, workouts, SPO2, VO2 max)
-- [ ] MCP resources (`oura://today`, `oura://weekly-summary`)
-- [ ] Remaining endpoints (resilience, cardiovascular age, tags, sessions)
+- [x] MCP resources (`oura://today`, `oura://weekly-summary`)
+- [x] Remaining endpoints (resilience, cardiovascular age, tags, sessions)
 
-**Phase 3: Make it Smart**
+**Phase 3: Make it Smart** (In Progress)
 - [ ] Derived metrics (sleep debt, rolling averages, trends)
 - [ ] Smart analysis tools (`compare_periods`, `detect_anomalies`, `correlate`)
 - [ ] HRV analysis (time/frequency domain, Poincaré plots)
