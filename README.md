@@ -1,6 +1,7 @@
-# 🌙 Oura MCP Server
+# Oura MCP Server
 
 [![npm version](https://img.shields.io/npm/v/oura-ring-mcp.svg)](https://www.npmjs.com/package/oura-ring-mcp)
+[![MCP Registry](https://img.shields.io/badge/MCP-Registry-blue)](https://registry.modelcontextprotocol.io)
 [![CI](https://github.com/mitchhankins01/oura-ring-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mitchhankins01/oura-ring-mcp/actions/workflows/ci.yml)
 
 An MCP server that connects your Oura Ring to Claude and other AI assistants. Get human-readable insights about your sleep, readiness, and activity—not just raw JSON.
@@ -12,8 +13,12 @@ An MCP server that connects your Oura Ring to Claude and other AI assistants. Ge
 - **Readiness tracking** - Recovery scores and contributor breakdown
 - **Activity data** - Steps, calories, and intensity breakdown
 - **Health metrics** - Heart rate, SpO2, stress, cardiovascular age
-- **Workouts & sessions** - Exercise and meditation tracking
-- **Tags support** - Custom user tags and notes
+- **Smart analysis** - Anomaly detection, correlations, trend analysis
+- **Tags support** - Compare metrics with/without conditions
+
+![Demo](docs/outputs/demo.gif)
+
+📝 [See example outputs](docs/outputs/EXAMPLES.md) — what Claude returns for sleep, readiness, weekly summaries, and smart analysis
 
 ## Quick Start
 
@@ -34,29 +39,19 @@ npx oura-ring-mcp
 
 1. Go to [cloud.ouraring.com/personal-access-tokens](https://cloud.ouraring.com/personal-access-tokens)
 2. Create a new token
-3. Set `OURA_ACCESS_TOKEN` in your environment or Claude Desktop config
+3. Set `OURA_ACCESS_TOKEN` in your Claude Desktop config (see below)
 
-**Option B: OAuth CLI Flow (recommended for production)**
+**Option B: OAuth CLI Flow**
 
-1. Create an OAuth app at [developer.ouraring.com/applications](https://developer.ouraring.com/applications)
+1. Create an OAuth app at [developer.ouraring.com](https://developer.ouraring.com/applications)
    - Set Redirect URI to `http://localhost:3000/callback`
-   - Enable all scopes you need (Email, Personal, Daily, Heartrate, etc.)
-2. Set your credentials:
+2. Run the auth flow:
    ```bash
    export OURA_CLIENT_ID=your_client_id
    export OURA_CLIENT_SECRET=your_client_secret
-   ```
-3. Run the auth flow:
-   ```bash
    npx oura-ring-mcp auth
    ```
-4. A browser will open for Oura authorization. After approving, credentials are saved to `~/.oura-mcp/credentials.json`
-
-**Managing OAuth credentials:**
-```bash
-npx oura-ring-mcp status   # Check authentication status
-npx oura-ring-mcp logout   # Clear stored credentials
-```
+3. Credentials are saved to `~/.oura-mcp/credentials.json`
 
 ### 3. Configure Claude Desktop
 
@@ -77,7 +72,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-**With OAuth (after running `npx oura-ring-mcp auth`):**
+**With OAuth:**
 ```json
 {
   "mcpServers": {
@@ -93,255 +88,83 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-**Note**: This project requires Node >=24.
+Restart Claude Desktop. Requires Node >=24.
 
-Restart Claude Desktop.
+## What Can I Ask?
 
-## What can I ask?
-
-Once connected, try asking Claude:
-
+**Daily check-ins:**
 - "How did I sleep last night?"
-- "Show me my sleep data for the past week"
-- "What's my readiness score today?"
-- "Compare my activity from Monday to Friday"
-- "What was my average HRV this week?"
+- "Am I recovered enough to work out today?"
+- "What's my body telling me right now?"
 
-## Example Output
+**Patterns & trends:**
+- "Do I sleep better on weekends?"
+- "What time should I go to bed for optimal sleep?"
+- "Is my HRV improving or declining?"
 
-```
-## Sleep: 2024-01-15
-**Bedtime:** 10:45 PM → 6:30 AM
-**Total Sleep:** 7h 12m (of 7h 45m in bed)
-**Efficiency:** 93%
+**Correlations & insights:**
+- "Does alcohol affect my sleep quality?"
+- "What predicts my best sleep nights?"
+- "How does exercise timing affect my recovery?"
 
-**Sleep Stages:**
-- Deep: 1h 24m (19.4%)
-- REM: 1h 48m (25%)
-- Light: 4h 0m (55.6%)
-- Awake: 33m
+**Comparisons:**
+- "Compare my sleep this week vs last week"
+- "How do I sleep after meditation vs without?"
+- "What changed when I started taking magnesium?"
 
-**Biometrics:**
-- Avg Heart Rate: 52 bpm (lowest: 48)
-- Avg HRV: 45 ms
-- Avg Breathing Rate: 14.5 breaths/min
-```
+**Anomalies:**
+- "Are there any unusual readings in my data?"
+- "Why was my readiness so low yesterday?"
+- "Find days where my metrics were off"
 
 ## Available Tools
 
-### Data Retrieval (14 tools)
+### Data Retrieval
 
 | Tool | Description |
 |------|-------------|
-| `get_sleep` | Complete sleep data with stages, efficiency, HR, HRV |
+| `get_sleep` | Sleep data with stages, efficiency, HR, HRV |
 | `get_daily_sleep` | Daily sleep scores with contributors |
-| `get_readiness` | Daily readiness scores and recovery metrics |
-| `get_resilience` | Body's capacity to recover from stress |
-| `get_activity` | Daily activity, steps, calories, intensity breakdown |
-| `get_workouts` | Workout sessions with type, duration, intensity |
-| `get_sessions` | Meditation, breathing, and relaxation sessions |
-| `get_vo2_max` | Cardiorespiratory fitness measurements |
+| `get_readiness` | Readiness scores and recovery metrics |
+| `get_activity` | Steps, calories, intensity breakdown |
+| `get_workouts` | Workout sessions with type and intensity |
+| `get_sessions` | Meditation and relaxation sessions |
+| `get_heart_rate` | HR readings throughout the day |
 | `get_stress` | Stress levels and recovery time |
-| `get_heart_rate` | Individual HR readings throughout the day |
-| `get_spo2` | Blood oxygen saturation and breathing disturbance |
-| `get_cardiovascular_age` | Estimated vascular age based on heart health |
+| `get_spo2` | Blood oxygen and breathing disturbance |
 | `get_tags` | User-created tags and notes |
-| `get_enhanced_tags` | Rich tags with custom names and types |
 
-### Smart Analysis (7 tools)
+### Smart Analysis
 
 | Tool | Description |
 |------|-------------|
-| `detect_anomalies` | Find unusual readings using statistical outlier detection |
-| `analyze_sleep_quality` | Comprehensive sleep analysis with trends, patterns, debt |
-| `correlate_metrics` | Find correlations between any two health metrics |
-| `compare_periods` | Compare metrics between two time periods (this week vs last) |
-| `compare_conditions` | Compare metrics with/without conditions (tags + auto-tracked: workout, high_activity, meditation) |
-| `best_sleep_conditions` | Identify what predicts your good vs poor sleep (activity, workouts, sessions, tags) |
-| `analyze_hrv_trend` | HRV trend analysis with rolling averages and patterns |
+| `detect_anomalies` | Find unusual readings using outlier detection |
+| `analyze_sleep_quality` | Sleep analysis with trends, patterns, debt |
+| `correlate_metrics` | Find correlations between health metrics |
+| `compare_periods` | Compare this week vs last week |
+| `compare_conditions` | Compare metrics with/without a tag |
+| `best_sleep_conditions` | What predicts your good vs poor sleep |
+| `analyze_hrv_trend` | HRV trend with rolling averages |
 
-## MCP Resources
+## Resources
 
 | Resource | Description |
 |----------|-------------|
-| `oura://today` | Today's health summary (sleep, readiness, activity, stress) |
-| `oura://weekly-summary` | Last 7 days summary with averages and trends |
-| `oura://baseline` | Your personal 30-day averages and normal ranges |
-| `oura://monthly-insights` | Comprehensive 30-day analysis with trends, patterns, anomalies |
-| `oura://tag-summary` | Your tags and usage frequency (helpful before using `compare_conditions`) |
+| `oura://today` | Today's health summary |
+| `oura://weekly-summary` | Last 7 days with averages |
+| `oura://baseline` | Your 30-day averages and normal ranges |
+| `oura://monthly-insights` | 30-day analysis with trends and anomalies |
+| `oura://tag-summary` | Your tags and usage frequency |
 
-## MCP Prompts
-
-Pre-defined templates that guide Claude through common health analysis tasks:
+## Prompts
 
 | Prompt | Description |
 |--------|-------------|
-| `weekly-review` | Comprehensive review of sleep, readiness, and activity from the past week |
-| `sleep-optimization` | Analyze 30 days of sleep to identify what leads to your best sleep |
-| `recovery-check` | Check if you're recovered enough to train hard or should rest today |
-| `compare-weeks` | Compare this week vs last week across all health metrics |
-| `tag-analysis` | Analyze how a specific tag/condition affects your health (takes `tag` argument) |
-| `monthly-trends` | 30-day trend analysis with correlations and anomaly detection |
-| `quick-status` | Brief daily status check for quick decisions |
-
-## Development
-
-### Commands
-
-```bash
-pnpm install          # Install dependencies
-pnpm build            # Compile TypeScript
-pnpm dev              # Watch mode for development
-pnpm start            # Run the server
-
-# Type Management
-pnpm update-openapi   # Download latest OpenAPI spec from Oura
-pnpm generate-types   # Generate TypeScript types from spec
-pnpm update-types     # Update spec + generate types (all-in-one)
-```
-
-### Updating API Types
-
-When Oura releases API updates:
-
-```bash
-pnpm update-types
-pnpm build
-```
-
-This automatically scrapes the latest OpenAPI spec from Oura's docs and regenerates TypeScript types. See [CLAUDE.md](CLAUDE.md) for more details.
-
-## Roadmap
-
-### Phase 1: Hello World ✅
-- [x] Project scaffold
-- [x] Basic MCP server with stdio transport
-- [x] `get_sleep` tool with human-readable output
-- [x] `get_readiness` tool
-- [x] `get_activity` tool
-- [x] Test with Claude Desktop
-
-### Phase 2: Cover the API ✅
-- [x] Generate types from OpenAPI: `pnpm generate-types`
-- [x] Add high-priority endpoints:
-  - [x] `get_stress` - Daily stress levels and recovery time
-  - [x] `get_daily_sleep` - Sleep scores with contributors
-  - [x] `get_heart_rate` - Individual HR readings with timestamps
-  - [x] `get_workouts` - Workout sessions with activity type and intensity
-  - [x] `get_spo2` - Blood oxygen saturation and breathing disturbance index
-  - [x] `get_vo2_max` - Cardiorespiratory fitness measurements
-- [x] Add remaining endpoints:
-  - [x] `get_resilience` - Body's capacity to recover from stress
-  - [x] `get_cardiovascular_age` - Estimated vascular age
-  - [x] `get_tags` - User-created tags and notes
-  - [x] `get_sessions` - Meditation/breathing sessions
-- [x] Add MCP resources (`oura://today`, `oura://weekly-summary`)
-- [x] Better error messages (OuraApiError class, user-friendly messages, no-data tips)
-- [x] Set up Vitest with coverage thresholds (75/80/80/80)
-- [x] Create test infrastructure (fixtures, helpers directories)
-- [x] Write comprehensive tests for formatters (96%+ coverage achieved)
-- [x] Add tests for Oura client (mocked fetch)
-- [x] Add tests for tool handlers (mocked client)
-- [x] Add tests for MCP server (mocked SDK)
-- [x] Validate fixtures against real API (scripts/validate-fixtures.ts)
-- [x] Set up CI/CD for automated testing (GitHub Actions)
-- [x] Add pre-commit hooks for test validation (husky)
-
-### Phase 3: Make it Smart (In Progress)
-
-See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and code examples.
-
-**Analysis utilities (`src/utils/analysis.ts`):**
-- [x] Rolling averages (7-day, 14-day, 30-day)
-- [x] Trend detection via linear regression slope
-- [x] Anomaly detection (IQR method + Z-score method)
-- [x] Sleep debt tracking (vs 8hr target)
-- [x] Sleep regularity score (consistency of bed/wake times)
-- [x] Day-of-week patterns ("I sleep worst on Fridays")
-- [x] Dispersion analysis (coefficient of variation)
-- [x] Correlation with p-value
-- [x] Gaussian smoothing for visualization
-
-**Derived metrics:**
-- [x] Sleep stage ratios (deep/REM/light as % of total sleep)
-- [x] Sleep score formula (efficiency + deep% + REM%)
-- [x] HRV recovery pattern (first half vs second half of night)
-
-**HRV-specific features:** ⚠️ *Out of scope - Oura API only provides 5-minute aggregated HRV, not raw R-R intervals required for these metrics*
-- [x] ~~Time domain: SDNN, RMSSD, pNN50, CVSD~~ (requires R-R intervals)
-- [x] ~~Frequency domain: LF, HF, LF/HF ratio~~ (requires R-R intervals)
-- [x] ~~Non-linear: Poincaré SD1/SD2~~ (requires R-R intervals)
-- [x] ~~Preprocessing: ectopic beat removal~~ (requires R-R intervals)
-
-**Smart tools:**
-- [x] `detect_anomalies` - Flag unusual readings using IQR + Z-score
-- [x] `analyze_sleep_quality` - Comprehensive analysis with trends, patterns, debt
-- [x] `correlate_metrics` - Pearson correlation between any two metrics
-- [x] `analyze_hrv_trend(days)` - Recovery trajectory
-- [x] `compare_periods(period1, period2)` - This week vs last week
-- [x] `compare_conditions(tag, metric)` - With tag vs without tag comparison
-- [x] `best_sleep_conditions()` - What predicts your good nights
-
-**Visualization-ready data (for Claude artifacts):**
-- [ ] Sleep stages stackplot data (Oura app style)
-- [ ] Heart rate during sleep with smoothing
-- [ ] HRV during sleep with smoothing
-- [ ] Body temperature trend bars
-- [x] ~~Poincaré plot data (SD1/SD2 ellipse)~~ (requires R-R intervals)
-
-**MCP prompts (7 available):**
-- [x] `weekly-review` - Comprehensive weekly health review
-- [x] `sleep-optimization` - 30-day sleep pattern analysis
-- [x] `recovery-check` - Today's recovery status and training guidance
-- [x] `compare-weeks` - This week vs last week comparison
-- [x] `tag-analysis` - Analyze impact of a specific tag/condition
-- [x] `monthly-trends` - 30-day trend analysis with correlations
-- [x] `quick-status` - Brief daily status check
-
-### Phase 4a: Ship It (Local) ✅
-- [x] CLI auth flow: `npx oura-ring-mcp auth` (for when PAT deprecated)
-- [x] Publish to npm as `oura-ring-mcp`
-- [ ] Demo gif, examples, screenshots
-- [x] Add to MCP registry
-
-### Phase 4b: Remote Access
-- [ ] HTTP transport (SSE) for remote connections
-- [ ] Hosted OAuth callback flow
-- [ ] Deploy to Railway/Fly/Render
-- [ ] Add production monitoring
-- [ ] Connect from Claude mobile (when MCP support lands)
-
-## Oura API Quirks
-
-Documented issues discovered while building this server that developers should be aware of.
-
-### Single-Date Query Bug
-
-**Affected endpoints:** `/sleep`, `/daily_activity`, `/workout`, `/session`, `/tag`, `/enhanced_tag`
-
-When `start_date == end_date`, these endpoints return empty arrays even when data exists.
-
-```bash
-# Returns empty despite data existing for 2026-01-21
-curl ".../sleep?start_date=2026-01-21&end_date=2026-01-21"  # → []
-
-# Works when range is expanded
-curl ".../sleep?start_date=2026-01-20&end_date=2026-01-22"  # → [data]
-```
-
-**Workaround:** Query with ±1 day range and filter results client-side. The `/enhanced_tag` endpoint is worse—requires ±3 days.
-
-**NOT affected:** `/daily_sleep`, `/daily_readiness`, `/daily_stress`, `/daily_spo2`, `/heartrate`, `/vO2_max`, `/daily_resilience`, `/daily_cardiovascular_age`
-
-### OpenAPI Spec Missing `sleep_regularity`
-
-The v2 API returns `sleep_regularity` in `ReadinessContributors`, but it's not in the OpenAPI spec (v1.27). TypeScript consumers must cast to access it.
-
-### Internal vs Public API Discrepancy
-
-The Oura dashboard uses internal endpoints with additional fields not in the public API:
-- `average_breath_variation`, `got_ups`, `sleep_midpoint`, `wake_ups`
-- Activity targets (`target_calories`, `target_meters`)
+| `weekly-review` | Comprehensive weekly health review |
+| `sleep-optimization` | Identify what leads to your best sleep |
+| `recovery-check` | Should you train hard or rest today? |
+| `compare-weeks` | This week vs last week comparison |
+| `tag-analysis` | How a specific tag affects your health |
 
 ## Contributing
 

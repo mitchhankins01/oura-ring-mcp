@@ -24,6 +24,5 @@ npm-debug.log*
 coverage/
 .nyc_output/
 
-docs/
 # MCP registry auth tokens
 .mcpregistry_*

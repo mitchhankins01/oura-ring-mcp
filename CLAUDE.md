@@ -132,11 +132,47 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - Use Zod for API response validation—define schema once, get types with `z.infer<typeof schema>`
 - Once work has been completed, update CLAUDE.MD accordingly. Conversely, if more work needs to be done at it as well.
 
-## Development Phases
+## Development Phases & Roadmap
 
-See [README.md](README.md#roadmap) for the full roadmap with detailed checklists.
+### Phase 1: Core Foundation ✅
+- [x] MCP server setup with stdio transport
+- [x] Oura API client with TypeScript types
+- [x] Core tools: sleep, readiness, activity
+- [x] Human-readable formatters
+- [x] Basic error handling
 
-**Current status:** Phase 4a (Ship It - Local) complete. OAuth CLI auth working (`auth`, `logout`, `status` commands). 27 tools, 7 resources, 7 prompts. Ready for npm publish.
+### Phase 2: Expand Coverage ✅
+- [x] All Oura endpoints: workouts, sessions, stress, SpO2, HR, etc.
+- [x] Enhanced tags support
+- [x] MCP resources: today, weekly-summary, baseline, monthly-insights
+- [x] User/ring info endpoints
+
+### Phase 3: Make It Smart ✅
+- [x] Statistical analysis utilities (mean, std, correlation, trend)
+- [x] Outlier detection (IQR + Z-score)
+- [x] Smart tools: anomaly detection, sleep quality analysis, correlations
+- [x] Period and condition comparison tools
+- [x] HRV trend analysis
+- [x] MCP prompts for common analysis tasks
+- [x] Tag summary resource
+- [x] Streaks and weekly report resources
+
+### Phase 4a: Ship It - Local ✅
+- [x] OAuth CLI flow (`npx oura-ring-mcp auth`)
+- [x] Token storage (~/.oura-mcp/credentials.json)
+- [x] Auto-refresh for expired tokens
+- [x] `status` and `logout` commands
+- [x] npm publish (oura-ring-mcp)
+- [x] MCP Registry submission
+- [x] Demo GIF and examples
+
+### Phase 4b: Remote Access (Future)
+- [ ] HTTP transport with SSE
+- [ ] OAuth callback hosted on server
+- [ ] Deploy to Railway/Fly/Render
+- [ ] Mobile access when Claude app supports MCP
+
+**Current status:** Phase 4a complete. Published to npm and MCP Registry. 27 tools, 7 resources, 7 prompts.
 
 ## Key Files
 
@@ -378,8 +414,11 @@ Credentials saved to `~/.oura-mcp/credentials.json`. Server auto-refreshes expir
 
 ## Oura API Quirks
 
-See [README.md](README.md#oura-api-quirks) for the full list. Key points for development:
+Important quirks to know when developing:
 
 - **Single-date query bug**: `/sleep`, `/daily_activity`, `/workout`, `/session`, `/tag`, `/enhanced_tag` return empty when `start == end`. Workaround: query ±1 day (±3 for enhanced_tag).
 - **Missing `sleep_regularity`**: Not in OpenAPI spec but returned by API. Cast to access.
 - **Two sleep endpoints**: `/daily_sleep` (scores only) vs `/sleep` (detailed sessions). Use both for complete data.
+- **Sleep attribution**: Sleep data is attributed to the day you woke up, not when you fell asleep.
+- **Data sync**: Data only syncs when user opens Oura app - "no data" often means ring hasn't synced yet.
+- **Rate limits**: 5000 requests per 5 minutes.
