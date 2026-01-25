@@ -1589,6 +1589,212 @@ describe("Tool Handlers", () => {
 
       expect(result.content[0].text).toContain("No tags found");
     });
+
+    it("should compare workout days vs rest days (auto-tracked)", async () => {
+      const workoutsData = {
+        data: [
+          { id: "1", day: "2024-01-01", activity: "running", calories: 300 },
+          { id: "2", day: "2024-01-03", activity: "cycling", calories: 250 },
+        ],
+        next_token: null,
+      };
+      const sleepData = {
+        data: [
+          { day: "2024-01-01", total_sleep_duration: 28800, type: "long_sleep" }, // 8h workout day
+          { day: "2024-01-02", total_sleep_duration: 25200, type: "long_sleep" }, // 7h rest day
+          { day: "2024-01-03", total_sleep_duration: 27000, type: "long_sleep" }, // 7.5h workout day
+          { day: "2024-01-04", total_sleep_duration: 21600, type: "long_sleep" }, // 6h rest day
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getWorkouts: vi.fn().mockResolvedValue(workoutsData),
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailyReadiness: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "workout", metric: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("Condition Comparison");
+      expect(result.content[0].text).toContain("workout");
+      expect(result.content[0].text).toContain("With");
+      expect(result.content[0].text).toContain("Without");
+    });
+
+    it("should compare high activity days vs low activity days", async () => {
+      const activityData = {
+        data: [
+          { day: "2024-01-01", steps: 15000, active_calories: 500 }, // High
+          { day: "2024-01-02", steps: 5000, active_calories: 150 },  // Low
+          { day: "2024-01-03", steps: 12000, active_calories: 400 }, // High
+          { day: "2024-01-04", steps: 4000, active_calories: 100 },  // Low
+          { day: "2024-01-05", steps: 8000, active_calories: 250 },  // Average
+        ],
+        next_token: null,
+      };
+      const sleepData = {
+        data: [
+          { day: "2024-01-01", total_sleep_duration: 28800, type: "long_sleep" },
+          { day: "2024-01-02", total_sleep_duration: 21600, type: "long_sleep" },
+          { day: "2024-01-03", total_sleep_duration: 27000, type: "long_sleep" },
+          { day: "2024-01-04", total_sleep_duration: 23400, type: "long_sleep" },
+          { day: "2024-01-05", total_sleep_duration: 25200, type: "long_sleep" },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getDailyActivity: vi.fn().mockResolvedValue(activityData),
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailyReadiness: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "high_activity", metric: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("Condition Comparison");
+      expect(result.content[0].text).toContain("high activity");
+    });
+
+    it("should compare meditation days vs non-meditation days", async () => {
+      const sessionsData = {
+        data: [
+          { id: "1", day: "2024-01-01", type: "meditation", mood: "good" },
+          { id: "2", day: "2024-01-03", type: "breathing", mood: "relaxed" },
+        ],
+        next_token: null,
+      };
+      const sleepData = {
+        data: [
+          { day: "2024-01-01", total_sleep_duration: 28800, type: "long_sleep" },
+          { day: "2024-01-02", total_sleep_duration: 21600, type: "long_sleep" },
+          { day: "2024-01-03", total_sleep_duration: 27000, type: "long_sleep" },
+          { day: "2024-01-04", total_sleep_duration: 23400, type: "long_sleep" },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSessions: vi.fn().mockResolvedValue(sessionsData),
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailyReadiness: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "meditation", metric: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("Condition Comparison");
+      expect(result.content[0].text).toContain("meditation");
+    });
+
+    it("should handle no workout data for workout condition", async () => {
+      mockClient = createMockClient({
+        getWorkouts: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getSleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailySleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailyReadiness: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "workout", metric: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("No workout days found");
+    });
+
+    it("should suggest auto-tracked options when no tags exist", async () => {
+      mockClient = createMockClient({
+        getEnhancedTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getSleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailySleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailyReadiness: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "alcohol", metric: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("auto-tracked");
+    });
+
+    it("should compare low_activity days vs high activity days", async () => {
+      const activityData = {
+        data: [
+          { day: "2024-01-01", steps: 3000, active_calories: 100 },  // Low
+          { day: "2024-01-02", steps: 12000, active_calories: 400 }, // High
+          { day: "2024-01-03", steps: 2500, active_calories: 80 },   // Low
+          { day: "2024-01-04", steps: 11000, active_calories: 350 }, // High
+          { day: "2024-01-05", steps: 7000, active_calories: 200 },  // Average
+        ],
+        next_token: null,
+      };
+      const sleepData = {
+        data: [
+          { day: "2024-01-01", total_sleep_duration: 28800, type: "long_sleep" },
+          { day: "2024-01-02", total_sleep_duration: 21600, type: "long_sleep" },
+          { day: "2024-01-03", total_sleep_duration: 27000, type: "long_sleep" },
+          { day: "2024-01-04", total_sleep_duration: 23400, type: "long_sleep" },
+          { day: "2024-01-05", total_sleep_duration: 25200, type: "long_sleep" },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getDailyActivity: vi.fn().mockResolvedValue(activityData),
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailyReadiness: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "low_activity", metric: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("Condition Comparison");
+      expect(result.content[0].text).toContain("low activity");
+    });
+
+    it("should handle session condition", async () => {
+      const sessionsData = {
+        data: [
+          { id: "1", day: "2024-01-01", type: "breathing", mood: "calm" },
+          { id: "2", day: "2024-01-03", type: "meditation", mood: "focused" },
+        ],
+        next_token: null,
+      };
+      const sleepData = {
+        data: [
+          { day: "2024-01-01", total_sleep_duration: 28800, type: "long_sleep" },
+          { day: "2024-01-02", total_sleep_duration: 21600, type: "long_sleep" },
+          { day: "2024-01-03", total_sleep_duration: 27000, type: "long_sleep" },
+          { day: "2024-01-04", total_sleep_duration: 23400, type: "long_sleep" },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSessions: vi.fn().mockResolvedValue(sessionsData),
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailyReadiness: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "session", metric: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("Condition Comparison");
+      expect(result.content[0].text).toContain("meditation/session");
+    });
   });
 
   // ─────────────────────────────────────────────────────────────
@@ -1626,6 +1832,9 @@ describe("Tool Handlers", () => {
         getDailySleep: vi.fn().mockResolvedValue(scoresData),
         getDailyActivity: vi.fn().mockResolvedValue(activityData),
         getEnhancedTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getWorkouts: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getSessions: vi.fn().mockResolvedValue({ data: [], next_token: null }),
       });
       registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
 
@@ -1660,6 +1869,9 @@ describe("Tool Handlers", () => {
         getDailySleep: vi.fn().mockResolvedValue(scoresData),
         getDailyActivity: vi.fn().mockResolvedValue({ data: [], next_token: null }),
         getEnhancedTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getWorkouts: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getSessions: vi.fn().mockResolvedValue({ data: [], next_token: null }),
       });
       registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
 
@@ -1725,6 +1937,9 @@ describe("Tool Handlers", () => {
         getDailySleep: vi.fn().mockResolvedValue(scoresData),
         getDailyActivity: vi.fn().mockResolvedValue({ data: [], next_token: null }),
         getEnhancedTags: vi.fn().mockResolvedValue(tagsData),
+        getTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getWorkouts: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getSessions: vi.fn().mockResolvedValue({ data: [], next_token: null }),
       });
       registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
 
@@ -1736,6 +1951,141 @@ describe("Tool Handlers", () => {
       expect(result.content[0].text).toContain("alcohol");
       expect(result.content[0].text).toContain("associated with good sleep");
       expect(result.content[0].text).toContain("associated with poor sleep");
+    });
+
+    it("should show auto-tracked conditions impact (workouts and meditation)", async () => {
+      const sleepData = {
+        data: Array.from({ length: 20 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          total_sleep_duration: 25200,
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+      // Sleep scores: first 5 good (90), days 6-10 poor (55), rest mixed
+      const scoresData = {
+        data: Array.from({ length: 20 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          score: i < 5 ? 90 : i < 10 ? 55 : 75,
+        })),
+        next_token: null,
+      };
+      // Workouts on good sleep days
+      const workoutsData = {
+        data: [
+          { id: "1", day: "2024-01-01", activity: "running", calories: 300 },
+          { id: "2", day: "2024-01-02", activity: "cycling", calories: 250 },
+          { id: "3", day: "2024-01-03", activity: "swimming", calories: 280 },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue(scoresData),
+        getDailyActivity: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getEnhancedTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getWorkouts: vi.fn().mockResolvedValue(workoutsData),
+        getSessions: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("best_sleep_conditions")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("Auto-Tracked Conditions");
+      expect(result.content[0].text).toContain("Workout");
+    });
+
+    it("should show meditation impact with good sleep correlation", async () => {
+      const sleepData = {
+        data: Array.from({ length: 20 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          total_sleep_duration: 25200,
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+      // Sleep scores: first 5 good (90), days 6-10 poor (55), rest mixed
+      const scoresData = {
+        data: Array.from({ length: 20 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          score: i < 5 ? 90 : i < 10 ? 55 : 75,
+        })),
+        next_token: null,
+      };
+      // Meditation sessions on good sleep days (should show positive correlation)
+      const sessionsData = {
+        data: [
+          { id: "1", day: "2024-01-01", type: "meditation", mood: "calm" },
+          { id: "2", day: "2024-01-02", type: "breathing", mood: "relaxed" },
+          { id: "3", day: "2024-01-03", type: "meditation", mood: "focused" },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue(scoresData),
+        getDailyActivity: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getEnhancedTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getWorkouts: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getSessions: vi.fn().mockResolvedValue(sessionsData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("best_sleep_conditions")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("Meditation/Session");
+      expect(result.content[0].text).toContain("associated with good sleep");
+    });
+
+    it("should show workout negative impact when correlated with poor sleep", async () => {
+      const sleepData = {
+        data: Array.from({ length: 20 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          total_sleep_duration: 25200,
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+      // Sleep scores: first 5 good (90), days 6-10 poor (55), rest mixed
+      const scoresData = {
+        data: Array.from({ length: 20 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          score: i < 5 ? 90 : i < 10 ? 55 : 75,
+        })),
+        next_token: null,
+      };
+      // Workouts on poor sleep days (should show negative correlation)
+      const workoutsData = {
+        data: [
+          { id: "1", day: "2024-01-06", activity: "running", calories: 400 },
+          { id: "2", day: "2024-01-07", activity: "cycling", calories: 350 },
+          { id: "3", day: "2024-01-08", activity: "swimming", calories: 380 },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue(scoresData),
+        getDailyActivity: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getEnhancedTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getWorkouts: vi.fn().mockResolvedValue(workoutsData),
+        getSessions: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("best_sleep_conditions")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("Workout");
+      expect(result.content[0].text).toContain("affecting your sleep negatively");
     });
 
   });

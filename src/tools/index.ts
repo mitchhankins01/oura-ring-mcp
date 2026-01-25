@@ -1524,13 +1524,18 @@ export function registerTools(server: McpServer, client: OuraClient) {
   // ─────────────────────────────────────────────────────────────
   // compare_conditions tool
   // ─────────────────────────────────────────────────────────────
+
+  // Auto-tracked conditions that don't require manual tags
+  const AUTO_CONDITIONS = ["workout", "high_activity", "low_activity", "meditation", "session"] as const;
+  type AutoCondition = typeof AUTO_CONDITIONS[number];
+
   server.registerTool(
     "compare_conditions",
     {
       description:
-        "Compare a health metric across different conditions using your tags. For example, compare sleep quality on nights after alcohol vs no alcohol, or with/without caffeine. Requires enhanced tags to be set in the Oura app.",
+        "Compare a health metric across different conditions. Supports manual tags (alcohol, caffeine) AND auto-tracked conditions: 'workout' (workout days vs rest days), 'high_activity' (high step days), 'meditation' (session days).",
       inputSchema: {
-        tag: z.string().describe("Tag to compare (e.g., 'alcohol', 'caffeine', 'late_meal', or custom tag name)"),
+        tag: z.string().describe("Condition to compare. Manual tags: 'alcohol', 'caffeine', 'late_meal'. Auto-tracked: 'workout', 'high_activity', 'meditation'."),
         metric: z.enum(["sleep_duration", "sleep_score", "deep_sleep", "rem_sleep", "hrv", "heart_rate", "efficiency", "readiness"]).describe("Metric to compare"),
         days: z.number().optional().describe("Number of days to analyze (default: 90)"),
       },
@@ -1539,71 +1544,115 @@ export function registerTools(server: McpServer, client: OuraClient) {
       try {
         const endDate = getToday();
         const startDate = getDaysAgo(days);
+        const tagLower = tag.toLowerCase() as AutoCondition;
+        const isAutoCondition = AUTO_CONDITIONS.includes(tagLower as AutoCondition);
 
-        // Fetch both enhanced tags AND regular tags, plus sleep data
-        const [enhancedTagsResult, regularTagsResult, sleepResult, scoresResult, readinessResult] = await Promise.allSettled([
-          client.getEnhancedTags(startDate, endDate),
-          client.getTags(startDate, endDate),
+        // Fetch sleep and readiness data (always needed)
+        const [sleepResult, scoresResult, readinessResult] = await Promise.allSettled([
           client.getSleep(startDate, endDate),
           client.getDailySleep(startDate, endDate),
           client.getDailyReadiness(startDate, endDate),
         ]);
 
-        const enhancedTags = enhancedTagsResult.status === "fulfilled" ? enhancedTagsResult.value.data : [];
-        const regularTags = regularTagsResult.status === "fulfilled" ? regularTagsResult.value.data : [];
         const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
         const sessions = allSleep.filter((s) => s.type === "long_sleep");
         const scores = scoresResult.status === "fulfilled" ? scoresResult.value.data : [];
         const readiness = readinessResult.status === "fulfilled" ? readinessResult.value.data : [];
 
-        if (enhancedTags.length === 0 && regularTags.length === 0) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `No tags found in the past ${days} days. Tags are manual lifestyle notes you add in the Oura app—try tracking alcohol, caffeine, late meals, or stress to see how they affect your sleep.`,
-              },
-            ],
-          };
-        }
-
-        // Find days with the specified tag
-        // Check enhanced tags (custom_name or tag_type_code) and regular tags (tags[] array)
-        const tagLower = tag.toLowerCase();
         const daysWithTag = new Set<string>();
+        let conditionLabel = tag;
 
-        // Check enhanced tags
-        for (const t of enhancedTags) {
-          const customMatch = t.custom_name?.toLowerCase().includes(tagLower);
-          const codeMatch = t.tag_type_code?.toLowerCase().includes(tagLower);
-          if (customMatch || codeMatch) {
-            daysWithTag.add(t.start_day);
-          }
-        }
-
-        // Check regular tags (predefined tags like "caffeine", "alcohol")
-        for (const t of regularTags) {
-          for (const tagName of t.tags) {
-            if (tagName.toLowerCase().includes(tagLower)) {
-              daysWithTag.add(t.day);
+        if (isAutoCondition) {
+          // Handle auto-tracked conditions
+          if (tagLower === "workout") {
+            const workoutsResult = await client.getWorkouts(startDate, endDate);
+            workoutsResult.data.forEach((w) => daysWithTag.add(w.day));
+            conditionLabel = "workout";
+          } else if (tagLower === "meditation" || tagLower === "session") {
+            const sessionsResult = await client.getSessions(startDate, endDate);
+            sessionsResult.data.forEach((s) => daysWithTag.add(s.day));
+            conditionLabel = "meditation/session";
+          } else if (tagLower === "high_activity" || tagLower === "low_activity") {
+            const activityResult = await client.getDailyActivity(startDate, endDate);
+            const activities = activityResult.data;
+            if (activities.length >= 5) {
+              const allSteps = activities.map((a) => a.steps ?? 0).filter((s) => s > 0);
+              const avgSteps = mean(allSteps);
+              activities.forEach((a) => {
+                const steps = a.steps ?? 0;
+                if (tagLower === "high_activity" && steps > avgSteps * 1.2) {
+                  daysWithTag.add(a.day);
+                } else if (tagLower === "low_activity" && steps < avgSteps * 0.8) {
+                  daysWithTag.add(a.day);
+                }
+              });
+              conditionLabel = tagLower === "high_activity" ? "high activity (>20% above avg)" : "low activity (<20% below avg)";
             }
           }
-        }
 
-        if (daysWithTag.size === 0) {
-          // Collect all available tags for the error message
-          const allTagNames = new Set<string>();
-          enhancedTags.forEach((t) => allTagNames.add(t.custom_name || t.tag_type_code || "unknown"));
-          regularTags.forEach((t) => t.tags.forEach((name) => allTagNames.add(name)));
+          if (daysWithTag.size === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `No ${conditionLabel} days found in the past ${days} days. Try a longer time period or check that you have ${tagLower === "workout" ? "workouts" : tagLower === "meditation" || tagLower === "session" ? "meditation sessions" : "activity data"} recorded.`,
+                },
+              ],
+            };
+          }
+        } else {
+          // Handle manual tags
+          const [enhancedTagsResult, regularTagsResult] = await Promise.allSettled([
+            client.getEnhancedTags(startDate, endDate),
+            client.getTags(startDate, endDate),
+          ]);
 
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `No "${tag}" tags found. Available tags in this period: ${[...allTagNames].join(", ")}`,
-              },
-            ],
-          };
+          const enhancedTags = enhancedTagsResult.status === "fulfilled" ? enhancedTagsResult.value.data : [];
+          const regularTags = regularTagsResult.status === "fulfilled" ? regularTagsResult.value.data : [];
+
+          if (enhancedTags.length === 0 && regularTags.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `No tags found in the past ${days} days. Tags are manual lifestyle notes you add in the Oura app—try tracking alcohol, caffeine, late meals, or stress. Or use auto-tracked conditions: 'workout', 'high_activity', 'meditation'.`,
+                },
+              ],
+            };
+          }
+
+          // Find days with the specified tag
+          for (const t of enhancedTags) {
+            const customMatch = t.custom_name?.toLowerCase().includes(tagLower);
+            const codeMatch = t.tag_type_code?.toLowerCase().includes(tagLower);
+            if (customMatch || codeMatch) {
+              daysWithTag.add(t.start_day);
+            }
+          }
+
+          for (const t of regularTags) {
+            for (const tagName of t.tags) {
+              if (tagName.toLowerCase().includes(tagLower)) {
+                daysWithTag.add(t.day);
+              }
+            }
+          }
+
+          if (daysWithTag.size === 0) {
+            const allTagNames = new Set<string>();
+            enhancedTags.forEach((t) => allTagNames.add(t.custom_name || t.tag_type_code || "unknown"));
+            regularTags.forEach((t) => t.tags.forEach((name) => allTagNames.add(name)));
+            const tagList = [...allTagNames].join(", ") || "none";
+
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `No "${tag}" tags found. Available tags: ${tagList}. Auto-tracked options: workout, high_activity, meditation.`,
+                },
+              ],
+            };
+          }
         }
 
         // Create lookup maps
@@ -1687,15 +1736,15 @@ export function registerTools(server: McpServer, client: OuraClient) {
         const formatVal = (v: number) => (m.decimals > 0 ? v.toFixed(m.decimals) : Math.round(v).toString()) + m.unit;
 
         const lines = [
-          `## Condition Comparison: ${tag}`,
+          `## Condition Comparison: ${conditionLabel}`,
           "",
           `**Metric:** ${m.name}`,
           `**Period:** Last ${days} days`,
           "",
           `| Condition | Avg ${m.name} | Days |`,
           `|-----------|${"-".repeat(m.name.length + 6)}|------|`,
-          `| With "${tag}" | ${formatVal(avgWith)} | ${withTagValues.length} |`,
-          `| Without "${tag}" | ${formatVal(avgWithout)} | ${withoutTagValues.length} |`,
+          `| With ${conditionLabel} | ${formatVal(avgWith)} | ${withTagValues.length} |`,
+          `| Without ${conditionLabel} | ${formatVal(avgWithout)} | ${withoutTagValues.length} |`,
           "",
           `**Difference:** ${difference >= 0 ? "+" : ""}${formatVal(difference)} (${percentDiff >= 0 ? "+" : ""}${percentDiff.toFixed(0)}%)`,
           "",
@@ -1707,11 +1756,11 @@ export function registerTools(server: McpServer, client: OuraClient) {
         const isSignificant = Math.abs(percentDiff) > 5;
 
         if (isSignificant && isWorse) {
-          lines.push(`⚠ "${tag}" appears to negatively impact your ${m.name.toLowerCase()}.`);
+          lines.push(`⚠ ${conditionLabel} appears to negatively impact your ${m.name.toLowerCase()}.`);
         } else if (isSignificant && isBetter) {
-          lines.push(`✓ "${tag}" appears to positively impact your ${m.name.toLowerCase()}.`);
+          lines.push(`✓ ${conditionLabel} appears to positively impact your ${m.name.toLowerCase()}.`);
         } else {
-          lines.push(`→ "${tag}" doesn't show a significant impact on your ${m.name.toLowerCase()}.`);
+          lines.push(`→ ${conditionLabel} doesn't show a significant impact on your ${m.name.toLowerCase()}.`);
         }
 
         lines.push("");
@@ -1735,7 +1784,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
     "best_sleep_conditions",
     {
       description:
-        "Analyze what conditions are associated with your best sleep nights. Looks at activity levels, tags, and patterns to identify what predicts good vs poor sleep.",
+        "Analyze what conditions are associated with your best sleep nights. Looks at activity levels, workouts, meditation sessions, tags, and day-of-week patterns to identify what predicts good vs poor sleep.",
       inputSchema: {
         days: z.number().optional().describe("Number of days to analyze (default: 60)"),
       },
@@ -1745,13 +1794,15 @@ export function registerTools(server: McpServer, client: OuraClient) {
         const endDate = getToday();
         const startDate = getDaysAgo(days);
 
-        // Fetch all relevant data (including both enhanced and regular tags)
-        const [sleepResult, scoresResult, activityResult, enhancedTagsResult, regularTagsResult] = await Promise.allSettled([
+        // Fetch all relevant data (including tags, workouts, and sessions)
+        const [sleepResult, scoresResult, activityResult, enhancedTagsResult, regularTagsResult, workoutsResult, meditationResult] = await Promise.allSettled([
           client.getSleep(startDate, endDate),
           client.getDailySleep(startDate, endDate),
           client.getDailyActivity(startDate, endDate),
           client.getEnhancedTags(startDate, endDate),
           client.getTags(startDate, endDate),
+          client.getWorkouts(startDate, endDate),
+          client.getSessions(startDate, endDate),
         ]);
 
         const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
@@ -1760,6 +1811,12 @@ export function registerTools(server: McpServer, client: OuraClient) {
         const activity = activityResult.status === "fulfilled" ? activityResult.value.data : [];
         const enhancedTags = enhancedTagsResult.status === "fulfilled" ? enhancedTagsResult.value.data : [];
         const regularTags = regularTagsResult.status === "fulfilled" ? regularTagsResult.value.data : [];
+        const workouts = workoutsResult.status === "fulfilled" ? workoutsResult.value.data : [];
+        const meditationSessions = meditationResult.status === "fulfilled" ? meditationResult.value.data : [];
+
+        // Create sets for auto-tracked conditions
+        const workoutDays = new Set(workouts.map((w) => w.day));
+        const meditationDays = new Set(meditationSessions.map((s) => s.day));
 
         if (sessions.length < 10) {
           return {
@@ -1801,7 +1858,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
         const q25 = sortedScores[Math.floor(sortedScores.length * 0.25)];
         const q75 = sortedScores[Math.floor(sortedScores.length * 0.75)];
 
-        type NightData = { day: string; score: number; activity: DailyActivity | undefined; tags: string[] };
+        type NightData = { day: string; score: number; activity: DailyActivity | undefined; tags: string[]; hadWorkout: boolean; hadMeditation: boolean };
         const goodNights: NightData[] = [];
         const poorNights: NightData[] = [];
 
@@ -1814,6 +1871,8 @@ export function registerTools(server: McpServer, client: OuraClient) {
             score,
             activity: activityByDay.get(s.day),
             tags: tagsByDay.get(s.day) || [],
+            hadWorkout: workoutDays.has(s.day),
+            hadMeditation: meditationDays.has(s.day),
           };
 
           if (score >= q75) {
@@ -1859,6 +1918,51 @@ export function registerTools(server: McpServer, client: OuraClient) {
               lines.push(`→ Good sleep nights have ${stepsDiff.toFixed(0)}% more steps on average.`);
             } else {
               lines.push(`→ Good sleep nights have ${Math.abs(stepsDiff).toFixed(0)}% fewer steps on average.`);
+            }
+          }
+          lines.push("");
+        }
+
+        // Auto-tracked conditions analysis (workouts and meditation)
+        const workoutGood = goodNights.filter((n) => n.hadWorkout).length;
+        const workoutPoor = poorNights.filter((n) => n.hadWorkout).length;
+        const meditationGood = goodNights.filter((n) => n.hadMeditation).length;
+        const meditationPoor = poorNights.filter((n) => n.hadMeditation).length;
+
+        const hasWorkoutData = workoutGood + workoutPoor >= 3;
+        const hasMeditationData = meditationGood + meditationPoor >= 3;
+
+        if (hasWorkoutData || hasMeditationData) {
+          lines.push("### Auto-Tracked Conditions");
+          lines.push("");
+          lines.push("| Condition | Good Nights | Poor Nights | Good Rate |");
+          lines.push("|-----------|-------------|-------------|-----------|");
+
+          if (hasWorkoutData) {
+            const workoutGoodRate = workoutGood / (workoutGood + workoutPoor);
+            lines.push(`| Workout | ${workoutGood} | ${workoutPoor} | ${(workoutGoodRate * 100).toFixed(0)}% |`);
+          }
+          if (hasMeditationData) {
+            const meditationGoodRate = meditationGood / (meditationGood + meditationPoor);
+            lines.push(`| Meditation/Session | ${meditationGood} | ${meditationPoor} | ${(meditationGoodRate * 100).toFixed(0)}% |`);
+          }
+          lines.push("");
+
+          // Insights
+          if (hasWorkoutData) {
+            const workoutGoodRate = workoutGood / (workoutGood + workoutPoor);
+            if (workoutGoodRate > 0.6) {
+              lines.push(`✓ Workouts are associated with good sleep (${(workoutGoodRate * 100).toFixed(0)}% good nights)`);
+            } else if (workoutGoodRate < 0.4) {
+              lines.push(`⚠ Workouts may be affecting your sleep negatively (${((1 - workoutGoodRate) * 100).toFixed(0)}% poor nights)`);
+            }
+          }
+          if (hasMeditationData) {
+            const meditationGoodRate = meditationGood / (meditationGood + meditationPoor);
+            if (meditationGoodRate > 0.6) {
+              lines.push(`✓ Meditation/sessions are associated with good sleep (${(meditationGoodRate * 100).toFixed(0)}% good nights)`);
+            } else if (meditationGoodRate < 0.4) {
+              lines.push(`→ Meditation/sessions don't show a clear positive pattern yet`);
             }
           }
           lines.push("");

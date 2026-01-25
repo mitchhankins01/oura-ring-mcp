@@ -110,8 +110,8 @@ Once connected, try asking Claude:
 | `analyze_sleep_quality` | Comprehensive sleep analysis with trends, patterns, debt |
 | `correlate_metrics` | Find correlations between any two health metrics |
 | `compare_periods` | Compare metrics between two time periods (this week vs last) |
-| `compare_conditions` | Compare metrics with/without tags (alcohol vs no alcohol) |
-| `best_sleep_conditions` | Identify what predicts your good vs poor sleep nights |
+| `compare_conditions` | Compare metrics with/without conditions (tags + auto-tracked: workout, high_activity, meditation) |
+| `best_sleep_conditions` | Identify what predicts your good vs poor sleep (activity, workouts, sessions, tags) |
 | `analyze_hrv_trend` | HRV trend analysis with rolling averages and patterns |
 
 ## MCP Resources

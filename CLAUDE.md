@@ -63,8 +63,8 @@ scripts/
 - `analyze_sleep_quality` - Comprehensive sleep analysis: trends, patterns, debt, regularity
 - `correlate_metrics` - Find correlations between any two metrics with p-value
 - `compare_periods` - Compare metrics between two time periods (e.g., this week vs last week)
-- `compare_conditions` - Compare metrics with/without tags (e.g., alcohol vs no alcohol)
-- `best_sleep_conditions` - Identify what conditions predict good vs poor sleep
+- `compare_conditions` - Compare metrics with/without conditions. Supports manual tags AND auto-tracked: 'workout', 'high_activity', 'low_activity', 'meditation'
+- `best_sleep_conditions` - Identify what conditions predict good vs poor sleep (activity, workouts, meditation sessions, tags)
 - `analyze_hrv_trend` - HRV trend analysis with rolling averages and recovery patterns
 
 ## MCP Resources
