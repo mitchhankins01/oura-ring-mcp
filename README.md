@@ -8,6 +8,8 @@ An MCP server that connects your Oura Ring to Claude and other AI assistants. Ge
 
 ## Features
 
+<img src="docs/outputs/demo.gif" width="500" alt="Demo">
+
 - **Smart formatting** - Durations in hours/minutes, scores with context ("85 - Optimal")
 - **Sleep analysis** - Sleep stages, efficiency, HRV, and biometrics
 - **Readiness tracking** - Recovery scores and contributor breakdown
@@ -16,9 +18,7 @@ An MCP server that connects your Oura Ring to Claude and other AI assistants. Ge
 - **Smart analysis** - Anomaly detection, correlations, trend analysis
 - **Tags support** - Compare metrics with/without conditions
 
-![Demo](docs/outputs/demo.gif)
-
-📝 [See example outputs](docs/outputs/EXAMPLES.md) — what Claude returns for sleep, readiness, weekly summaries, and smart analysis
+[See example outputs](docs/outputs/EXAMPLES.md) — what Claude returns for sleep, readiness, weekly summaries, and smart analysis
 
 ## Quick Start
 
