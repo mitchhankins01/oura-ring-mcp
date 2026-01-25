@@ -90,8 +90,8 @@ describe("Tool Handlers", () => {
   // ─────────────────────────────────────────────────────────────
 
   describe("registerTools", () => {
-    it("should register all 21 tools", () => {
-      expect(mockServer.getToolCount()).toBe(21);
+    it("should register all 27 tools", () => {
+      expect(mockServer.getToolCount()).toBe(27);
     });
 
     it("should register expected tool names", () => {
@@ -111,6 +111,10 @@ describe("Tool Handlers", () => {
         "get_tags",
         "get_enhanced_tags",
         "get_sessions",
+        "get_sleep_time",
+        "get_rest_mode",
+        "get_ring_info",
+        "get_personal_info",
         // Smart analysis tools
         "detect_anomalies",
         "analyze_sleep_quality",
@@ -119,6 +123,8 @@ describe("Tool Handlers", () => {
         "compare_conditions",
         "best_sleep_conditions",
         "analyze_hrv_trend",
+        "analyze_adherence",
+        "analyze_temperature",
       ];
 
       expectedTools.forEach((toolName) => {

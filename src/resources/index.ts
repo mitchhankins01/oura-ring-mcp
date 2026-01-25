@@ -811,4 +811,433 @@ export function registerResources(server: McpServer, client: OuraClient): void {
       };
     }
   );
+
+  // ─────────────────────────────────────────────────────────────
+  // oura://streaks - Track consecutive goal achievements
+  // ─────────────────────────────────────────────────────────────
+
+  server.registerResource(
+    "streaks",
+    "oura://streaks",
+    {
+      description: "Your current and best streaks for sleep, readiness, and activity goals. Track consecutive days of good health metrics.",
+      mimeType: "text/plain",
+    },
+    async () => {
+      const today = getToday();
+      const ninetyDaysAgo = getDaysAgo(90);
+      const sections: string[] = [];
+
+      sections.push(`# Your Health Streaks\n`);
+      sections.push(`*Based on data from ${ninetyDaysAgo} to ${today}*\n`);
+
+      // Fetch all data in parallel
+      const [sleepResult, readinessResult, activityResult] = await Promise.allSettled([
+        client.getDailySleep(ninetyDaysAgo, today),
+        client.getDailyReadiness(ninetyDaysAgo, today),
+        client.getDailyActivity(ninetyDaysAgo, today),
+      ]);
+
+      // Helper to calculate streaks
+      const calculateStreaks = (
+        data: { day: string; meetsGoal: boolean }[]
+      ): { current: number; best: number; currentStart?: string; bestStart?: string; bestEnd?: string } => {
+        // Sort by date descending (most recent first)
+        const sorted = [...data].sort((a, b) => b.day.localeCompare(a.day));
+
+        let current = 0;
+        let best = 0;
+        let bestStart: string | undefined;
+        let bestEnd: string | undefined;
+        let currentStart: string | undefined;
+        let tempStreak = 0;
+        let tempStart: string | undefined;
+
+        // Calculate current streak (from most recent)
+        for (const item of sorted) {
+          if (item.meetsGoal) {
+            if (current === 0) currentStart = item.day;
+            current++;
+          } else {
+            break;
+          }
+        }
+
+        // Calculate best streak (scan all data chronologically)
+        const chronological = [...data].sort((a, b) => a.day.localeCompare(b.day));
+        for (const item of chronological) {
+          if (item.meetsGoal) {
+            if (tempStreak === 0) tempStart = item.day;
+            tempStreak++;
+          } else {
+            if (tempStreak > best) {
+              best = tempStreak;
+              bestStart = tempStart;
+              bestEnd = chronological[chronological.indexOf(item) - 1]?.day;
+            }
+            tempStreak = 0;
+            tempStart = undefined;
+          }
+        }
+        // Check if final streak is the best
+        if (tempStreak > best) {
+          best = tempStreak;
+          bestStart = tempStart;
+          bestEnd = chronological[chronological.length - 1]?.day;
+        }
+
+        return { current, best, currentStart, bestStart, bestEnd };
+      };
+
+      // Sleep streaks (score >= 85 = "optimal")
+      if (sleepResult.status === "fulfilled" && sleepResult.value.data.length > 0) {
+        const sleepData = sleepResult.value.data.map(s => ({
+          day: s.day,
+          meetsGoal: (s.score ?? 0) >= 85,
+        }));
+        const sleepStreaks = calculateStreaks(sleepData);
+
+        sections.push("## 💤 Sleep Score Streaks (85+ = Optimal)");
+        sections.push(`- **Current streak:** ${sleepStreaks.current} days${sleepStreaks.current > 0 && sleepStreaks.currentStart ? ` (since ${sleepStreaks.currentStart})` : ""}`);
+        sections.push(`- **Best streak:** ${sleepStreaks.best} days${sleepStreaks.bestStart ? ` (${sleepStreaks.bestStart} to ${sleepStreaks.bestEnd})` : ""}`);
+
+        // Show progress indicator
+        if (sleepStreaks.current > 0) {
+          const progress = "🟢".repeat(Math.min(sleepStreaks.current, 7));
+          sections.push(`- ${progress}`);
+        }
+        sections.push("");
+      }
+
+      // Readiness streaks (score >= 85 = "optimal")
+      if (readinessResult.status === "fulfilled" && readinessResult.value.data.length > 0) {
+        const readinessData = readinessResult.value.data.map(r => ({
+          day: r.day,
+          meetsGoal: (r.score ?? 0) >= 85,
+        }));
+        const readinessStreaks = calculateStreaks(readinessData);
+
+        sections.push("## 🔋 Readiness Score Streaks (85+ = Optimal)");
+        sections.push(`- **Current streak:** ${readinessStreaks.current} days${readinessStreaks.current > 0 && readinessStreaks.currentStart ? ` (since ${readinessStreaks.currentStart})` : ""}`);
+        sections.push(`- **Best streak:** ${readinessStreaks.best} days${readinessStreaks.bestStart ? ` (${readinessStreaks.bestStart} to ${readinessStreaks.bestEnd})` : ""}`);
+
+        if (readinessStreaks.current > 0) {
+          const progress = "🟢".repeat(Math.min(readinessStreaks.current, 7));
+          sections.push(`- ${progress}`);
+        }
+        sections.push("");
+      }
+
+      // Activity streaks (steps >= 10000 OR activity score >= 85)
+      if (activityResult.status === "fulfilled" && activityResult.value.data.length > 0) {
+        // 10k steps streak
+        const stepData = activityResult.value.data.map(a => ({
+          day: a.day,
+          meetsGoal: (a.steps ?? 0) >= 10000,
+        }));
+        const stepStreaks = calculateStreaks(stepData);
+
+        sections.push("## 🏃 10K Steps Streaks");
+        sections.push(`- **Current streak:** ${stepStreaks.current} days${stepStreaks.current > 0 && stepStreaks.currentStart ? ` (since ${stepStreaks.currentStart})` : ""}`);
+        sections.push(`- **Best streak:** ${stepStreaks.best} days${stepStreaks.bestStart ? ` (${stepStreaks.bestStart} to ${stepStreaks.bestEnd})` : ""}`);
+
+        if (stepStreaks.current > 0) {
+          const progress = "🟢".repeat(Math.min(stepStreaks.current, 7));
+          sections.push(`- ${progress}`);
+        }
+        sections.push("");
+
+        // Activity score streak
+        const activityScoreData = activityResult.value.data.map(a => ({
+          day: a.day,
+          meetsGoal: (a.score ?? 0) >= 85,
+        }));
+        const activityStreaks = calculateStreaks(activityScoreData);
+
+        sections.push("## 🎯 Activity Score Streaks (85+ = Optimal)");
+        sections.push(`- **Current streak:** ${activityStreaks.current} days${activityStreaks.current > 0 && activityStreaks.currentStart ? ` (since ${activityStreaks.currentStart})` : ""}`);
+        sections.push(`- **Best streak:** ${activityStreaks.best} days${activityStreaks.bestStart ? ` (${activityStreaks.bestStart} to ${activityStreaks.bestEnd})` : ""}`);
+
+        if (activityStreaks.current > 0) {
+          const progress = "🟢".repeat(Math.min(activityStreaks.current, 7));
+          sections.push(`- ${progress}`);
+        }
+        sections.push("");
+      }
+
+      // Summary
+      sections.push("---");
+      sections.push("*Streaks reset when a day falls below the goal threshold. Missing data days break the streak.*");
+
+      return {
+        contents: [
+          {
+            uri: "oura://streaks",
+            mimeType: "text/plain",
+            text: sections.join("\n"),
+          },
+        ],
+      };
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // oura://weekly-report - Comprehensive weekly health report with recommendations
+  // ─────────────────────────────────────────────────────────────
+
+  server.registerResource(
+    "weekly-report",
+    "oura://weekly-report",
+    {
+      description: "Comprehensive weekly health report with data analysis, highlights, concerns, and actionable recommendations. More detailed than weekly-summary.",
+      mimeType: "text/plain",
+    },
+    async () => {
+      const today = getToday();
+      const weekAgo = getDaysAgo(7);
+      const twoWeeksAgo = getDaysAgo(14);
+      const sections: string[] = [];
+
+      sections.push(`# Weekly Health Report`);
+      sections.push(`*${weekAgo} to ${today}*\n`);
+
+      // Fetch this week and previous week for comparison
+      const [
+        sleepThisWeek,
+        sleepLastWeek,
+        sessionsThisWeek,
+        sessionsLastWeek,
+        readinessThisWeek,
+        readinessLastWeek,
+        activityThisWeek,
+        activityLastWeek,
+      ] = await Promise.all([
+        client.getDailySleep(weekAgo, today).catch(() => ({ data: [] })),
+        client.getDailySleep(twoWeeksAgo, getDaysAgo(8)).catch(() => ({ data: [] })),
+        client.getSleep(weekAgo, today).catch(() => ({ data: [] })),
+        client.getSleep(twoWeeksAgo, getDaysAgo(8)).catch(() => ({ data: [] })),
+        client.getDailyReadiness(weekAgo, today).catch(() => ({ data: [] })),
+        client.getDailyReadiness(twoWeeksAgo, getDaysAgo(8)).catch(() => ({ data: [] })),
+        client.getDailyActivity(weekAgo, today).catch(() => ({ data: [] })),
+        client.getDailyActivity(twoWeeksAgo, getDaysAgo(8)).catch(() => ({ data: [] })),
+      ]);
+
+      const highlights: string[] = [];
+      const concerns: string[] = [];
+      const recommendations: string[] = [];
+
+      // ═══════════════════════════════════════════════════════════
+      // SLEEP ANALYSIS
+      // ═══════════════════════════════════════════════════════════
+      sections.push("## 💤 Sleep");
+
+      if (sleepThisWeek.data.length > 0) {
+        const sleepScores = sleepThisWeek.data.map(s => s.score).filter((s): s is number => s != null);
+        const lastWeekScores = sleepLastWeek.data.map(s => s.score).filter((s): s is number => s != null);
+
+        if (sleepScores.length > 0) {
+          const avgScore = Math.round(sleepScores.reduce((a, b) => a + b, 0) / sleepScores.length);
+          const lastWeekAvg = lastWeekScores.length > 0
+            ? Math.round(lastWeekScores.reduce((a, b) => a + b, 0) / lastWeekScores.length)
+            : null;
+
+          sections.push(`- **Average Score:** ${avgScore}${lastWeekAvg ? ` (${avgScore >= lastWeekAvg ? "↑" : "↓"} from ${lastWeekAvg} last week)` : ""}`);
+
+          if (avgScore >= 85) {
+            highlights.push("Excellent sleep scores this week");
+          } else if (avgScore < 70) {
+            concerns.push("Sleep scores below optimal (<70 average)");
+            recommendations.push("Prioritize sleep: aim for consistent bedtime and 7-9 hours");
+          }
+
+          // Best/worst days
+          const sorted = [...sleepThisWeek.data].filter(s => s.score != null).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+          if (sorted.length >= 2) {
+            sections.push(`- **Best:** ${sorted[0].day} (${sorted[0].score}) | **Worst:** ${sorted[sorted.length - 1].day} (${sorted[sorted.length - 1].score})`);
+          }
+        }
+
+        // Duration analysis from sessions
+        if (sessionsThisWeek.data.length > 0) {
+          const mainSessions = sessionsThisWeek.data.filter(s => s.type === "long_sleep");
+          const durations = mainSessions.map(s => s.total_sleep_duration ?? 0).filter(d => d > 0);
+
+          if (durations.length > 0) {
+            const avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;
+            const avgHours = avgDuration / 3600;
+            sections.push(`- **Average Duration:** ${formatDuration(avgDuration)}/night`);
+
+            if (avgHours < 7) {
+              concerns.push(`Sleep duration averaging ${avgHours.toFixed(1)}h (below 7h recommended)`);
+              recommendations.push("Try going to bed 30 minutes earlier");
+            } else if (avgHours >= 7.5) {
+              highlights.push(`Good sleep duration (${avgHours.toFixed(1)}h average)`);
+            }
+
+            // Sleep debt calculation
+            const debt = sleepDebt(durations, 8);
+            if (debt.status === "significant_debt") {
+              concerns.push(`Sleep debt: ${debt.debtHours.toFixed(1)}h behind target`);
+            }
+
+            // HRV from sessions
+            const hrvValues = mainSessions.map(s => s.average_hrv).filter((h): h is number => h != null);
+            if (hrvValues.length > 0) {
+              const avgHrv = Math.round(hrvValues.reduce((a, b) => a + b, 0) / hrvValues.length);
+              sections.push(`- **Average HRV:** ${avgHrv} ms`);
+
+              // Compare to last week
+              const lastWeekSessions = sessionsLastWeek.data.filter(s => s.type === "long_sleep");
+              const lastWeekHrv = lastWeekSessions.map(s => s.average_hrv).filter((h): h is number => h != null);
+              if (lastWeekHrv.length > 0) {
+                const lastAvgHrv = Math.round(lastWeekHrv.reduce((a, b) => a + b, 0) / lastWeekHrv.length);
+                const change = avgHrv - lastAvgHrv;
+                if (Math.abs(change) >= 3) {
+                  if (change > 0) {
+                    highlights.push(`HRV improved by ${change} ms from last week`);
+                  } else {
+                    concerns.push(`HRV dropped by ${Math.abs(change)} ms from last week`);
+                    recommendations.push("Consider more rest and recovery activities");
+                  }
+                }
+              }
+            }
+
+            // Sleep regularity
+            const bedtimes = mainSessions.map(s => s.bedtime_start);
+            const waketimes = mainSessions.map(s => s.bedtime_end);
+            const regularity = sleepRegularity(bedtimes, waketimes);
+            if (regularity.regularityScore < 60) {
+              concerns.push("Irregular sleep schedule");
+              recommendations.push("Aim for consistent bed/wake times (±30 min)");
+            } else if (regularity.regularityScore >= 80) {
+              highlights.push("Excellent sleep schedule consistency");
+            }
+          }
+        }
+      } else {
+        sections.push("- No sleep data this week");
+      }
+      sections.push("");
+
+      // ═══════════════════════════════════════════════════════════
+      // READINESS ANALYSIS
+      // ═══════════════════════════════════════════════════════════
+      sections.push("## 🔋 Readiness");
+
+      if (readinessThisWeek.data.length > 0) {
+        const scores = readinessThisWeek.data.map(r => r.score).filter((s): s is number => s != null);
+        const lastWeekScores = readinessLastWeek.data.map(r => r.score).filter((s): s is number => s != null);
+
+        if (scores.length > 0) {
+          const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+          const lastWeekAvg = lastWeekScores.length > 0
+            ? Math.round(lastWeekScores.reduce((a, b) => a + b, 0) / lastWeekScores.length)
+            : null;
+
+          sections.push(`- **Average Score:** ${avgScore}${lastWeekAvg ? ` (${avgScore >= lastWeekAvg ? "↑" : "↓"} from ${lastWeekAvg} last week)` : ""}`);
+
+          if (avgScore >= 85) {
+            highlights.push("Strong readiness this week");
+          } else if (avgScore < 70) {
+            concerns.push("Low readiness scores - recovery may be compromised");
+            recommendations.push("Reduce training intensity and prioritize rest");
+          }
+
+          // Low days count
+          const lowDays = scores.filter(s => s < 70).length;
+          if (lowDays >= 3) {
+            concerns.push(`${lowDays} days with low readiness (<70)`);
+          }
+        }
+      } else {
+        sections.push("- No readiness data this week");
+      }
+      sections.push("");
+
+      // ═══════════════════════════════════════════════════════════
+      // ACTIVITY ANALYSIS
+      // ═══════════════════════════════════════════════════════════
+      sections.push("## 🏃 Activity");
+
+      if (activityThisWeek.data.length > 0) {
+        const steps = activityThisWeek.data.map(a => a.steps).filter((s): s is number => s != null);
+        const lastWeekSteps = activityLastWeek.data.map(a => a.steps).filter((s): s is number => s != null);
+
+        if (steps.length > 0) {
+          const avgSteps = Math.round(steps.reduce((a, b) => a + b, 0) / steps.length);
+          const totalSteps = steps.reduce((a, b) => a + b, 0);
+          const lastWeekAvg = lastWeekSteps.length > 0
+            ? Math.round(lastWeekSteps.reduce((a, b) => a + b, 0) / lastWeekSteps.length)
+            : null;
+
+          sections.push(`- **Average Steps:** ${avgSteps.toLocaleString()}/day${lastWeekAvg ? ` (${avgSteps >= lastWeekAvg ? "↑" : "↓"} from ${lastWeekAvg.toLocaleString()} last week)` : ""}`);
+          sections.push(`- **Total Steps:** ${totalSteps.toLocaleString()}`);
+
+          // 10k goal achievement
+          const daysOver10k = steps.filter(s => s >= 10000).length;
+          sections.push(`- **10K Goal:** ${daysOver10k}/${steps.length} days`);
+
+          if (daysOver10k === steps.length) {
+            highlights.push("Hit 10k steps every day!");
+          } else if (avgSteps < 5000) {
+            concerns.push("Low activity levels (<5k steps average)");
+            recommendations.push("Add short walks throughout the day");
+          } else if (avgSteps >= 10000) {
+            highlights.push(`Excellent activity level (${avgSteps.toLocaleString()} avg steps)`);
+          }
+        }
+
+        // Calories
+        const calories = activityThisWeek.data.map(a => a.active_calories).filter((c): c is number => c != null);
+        if (calories.length > 0) {
+          const avgCalories = Math.round(calories.reduce((a, b) => a + b, 0) / calories.length);
+          sections.push(`- **Active Calories:** ${avgCalories} avg/day`);
+        }
+      } else {
+        sections.push("- No activity data this week");
+      }
+      sections.push("");
+
+      // ═══════════════════════════════════════════════════════════
+      // HIGHLIGHTS, CONCERNS & RECOMMENDATIONS
+      // ═══════════════════════════════════════════════════════════
+      if (highlights.length > 0) {
+        sections.push("## ✨ Highlights");
+        highlights.forEach(h => sections.push(`- ${h}`));
+        sections.push("");
+      }
+
+      if (concerns.length > 0) {
+        sections.push("## ⚠️ Areas of Concern");
+        concerns.forEach(c => sections.push(`- ${c}`));
+        sections.push("");
+      }
+
+      if (recommendations.length > 0) {
+        sections.push("## 💡 Recommendations");
+        recommendations.forEach((r, i) => sections.push(`${i + 1}. ${r}`));
+        sections.push("");
+      }
+
+      if (highlights.length === 0 && concerns.length === 0) {
+        sections.push("## 📊 Summary");
+        sections.push("- Overall a stable week. Keep maintaining your current habits.");
+        sections.push("");
+      }
+
+      sections.push("---");
+      sections.push("*This report compares your data to your own patterns and general health guidelines.*");
+
+      return {
+        contents: [
+          {
+            uri: "oura://weekly-report",
+            mimeType: "text/plain",
+            text: sections.join("\n"),
+          },
+        ],
+      };
+    }
+  );
 }

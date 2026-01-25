@@ -24,6 +24,10 @@ import {
   Session,
   DailyReadiness,
   DailyActivity,
+  RestModePeriod,
+  RingConfiguration,
+  SleepTime,
+  PersonalInfo,
 } from "../client.js";
 import {
   formatDuration,
@@ -2212,6 +2216,522 @@ export function registerTools(server: McpServer, client: OuraClient) {
             lines.push(`- First half avg: ${recovery.firstHalfAvg} ms`);
             lines.push(`- Second half avg: ${recovery.secondHalfAvg} ms`);
             lines.push(`- ${recovery.interpretation}`);
+          }
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // analyze_adherence tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "analyze_adherence",
+    {
+      description:
+        "Analyze how consistently you wear your Oura ring. Shows daily non-wear time, identifies gaps in data, and calculates adherence percentage. Useful for understanding data quality.",
+      inputSchema: {
+        days: z.number().optional().describe("Number of days to analyze (default: 30)"),
+      },
+    },
+    async ({ days = 30 }) => {
+      try {
+        const endDate = getToday();
+        const startDate = getDaysAgo(days);
+
+        const activityResult = await client.getDailyActivity(startDate, endDate);
+        const data = activityResult.data;
+
+        if (data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No activity data found for the past ${days} days.`,
+              },
+            ],
+          };
+        }
+
+        const lines = [
+          `## Ring Adherence Analysis (${days} days)`,
+          "",
+        ];
+
+        // Calculate total days in range
+        const startMs = new Date(startDate).getTime();
+        const endMs = new Date(endDate).getTime();
+        const totalDaysInRange = Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1;
+
+        // Data coverage
+        const daysWithData = data.length;
+        const missingDays = totalDaysInRange - daysWithData;
+        const coveragePercent = Math.round((daysWithData / totalDaysInRange) * 100);
+
+        lines.push("### Data Coverage");
+        lines.push(`- Days with data: ${daysWithData} of ${totalDaysInRange} (${coveragePercent}%)`);
+        if (missingDays > 0) {
+          lines.push(`- Missing days: ${missingDays}`);
+        }
+        lines.push("");
+
+        // Non-wear time analysis
+        const nonWearTimes = data.map(d => d.non_wear_time ?? 0);
+        const totalNonWear = nonWearTimes.reduce((a, b) => a + b, 0);
+        const avgNonWear = totalNonWear / nonWearTimes.length;
+
+        lines.push("### Non-Wear Time");
+        lines.push(`- Average: ${formatDuration(avgNonWear)}/day`);
+        lines.push(`- Total: ${formatDuration(totalNonWear)} over ${daysWithData} days`);
+
+        // Days with high non-wear (> 4 hours)
+        const highNonWearDays = data.filter(d => (d.non_wear_time ?? 0) > 4 * 3600);
+        if (highNonWearDays.length > 0) {
+          lines.push(`- Days with >4h non-wear: ${highNonWearDays.length}`);
+          if (highNonWearDays.length <= 5) {
+            lines.push("  " + highNonWearDays.map(d => `${d.day} (${formatDuration(d.non_wear_time ?? 0)})`).join(", "));
+          }
+        }
+        lines.push("");
+
+        // Adherence score (percentage of time ring was worn)
+        // Assuming 24h day, calculate % of time worn
+        const totalPossibleSeconds = daysWithData * 24 * 3600;
+        const wearPercent = Math.round(((totalPossibleSeconds - totalNonWear) / totalPossibleSeconds) * 100);
+
+        lines.push("### Adherence Score");
+        lines.push(`- **${wearPercent}%** of time wearing ring`);
+        if (wearPercent >= 90) {
+          lines.push("- ✓ Excellent adherence - data quality is high");
+        } else if (wearPercent >= 75) {
+          lines.push("- Good adherence - some data may be missing");
+        } else if (wearPercent >= 50) {
+          lines.push("- ⚠ Moderate adherence - consider wearing ring more consistently");
+        } else {
+          lines.push("- ⚠ Low adherence - data quality may be affected");
+        }
+        lines.push("");
+
+        // Identify data gaps (missing consecutive days)
+        const allDays = new Set(data.map(d => d.day));
+        const gaps: { start: string; end: string; days: number }[] = [];
+        let currentDate = new Date(startDate);
+        let gapStart: string | null = null;
+        let gapDays = 0;
+
+        while (currentDate <= new Date(endDate)) {
+          const dateStr = currentDate.toISOString().split("T")[0];
+          if (!allDays.has(dateStr)) {
+            if (!gapStart) gapStart = dateStr;
+            gapDays++;
+          } else {
+            if (gapStart && gapDays > 1) {
+              const prevDate = new Date(currentDate);
+              prevDate.setDate(prevDate.getDate() - 1);
+              gaps.push({ start: gapStart, end: prevDate.toISOString().split("T")[0], days: gapDays });
+            }
+            gapStart = null;
+            gapDays = 0;
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        // Handle gap at end
+        if (gapStart && gapDays > 1) {
+          gaps.push({ start: gapStart, end: endDate, days: gapDays });
+        }
+
+        if (gaps.length > 0) {
+          lines.push("### Data Gaps (2+ days)");
+          for (const gap of gaps) {
+            lines.push(`- ${gap.start} to ${gap.end} (${gap.days} days)`);
+          }
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_sleep_time tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_sleep_time",
+    {
+      description:
+        "Get Oura's personalized bedtime recommendations. Shows your ideal bedtime window based on your sleep patterns and circadian rhythm.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
+
+        const response = await client.getSleepTime(startDate, endDate);
+
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No sleep time recommendations found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Oura needs enough data to generate bedtime recommendations.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((st: SleepTime) => {
+          const lines = [`## Bedtime Recommendation: ${st.day}`];
+
+          if (st.recommendation === "improve_efficiency") {
+            lines.push("**Status:** Working on improving sleep efficiency");
+          } else if (st.recommendation === "earlier_bedtime") {
+            lines.push("**Status:** Consider going to bed earlier");
+          } else if (st.recommendation === "later_bedtime") {
+            lines.push("**Status:** Consider going to bed later");
+          } else if (st.recommendation === "follow_optimal_bedtime") {
+            lines.push("**Status:** Following optimal bedtime");
+          } else if (st.recommendation) {
+            lines.push(`**Status:** ${st.recommendation}`);
+          }
+
+          if (st.optimal_bedtime?.day_tz) {
+            lines.push("");
+            lines.push("**Optimal Bedtime Window:**");
+            const startTime = st.optimal_bedtime.start_offset !== undefined
+              ? new Date(new Date(st.optimal_bedtime.day_tz).getTime() + st.optimal_bedtime.start_offset * 1000).toISOString()
+              : undefined;
+            const endTime = st.optimal_bedtime.end_offset !== undefined
+              ? new Date(new Date(st.optimal_bedtime.day_tz).getTime() + st.optimal_bedtime.end_offset * 1000).toISOString()
+              : undefined;
+            lines.push(`- Start: ${startTime ? formatTime(startTime) : "N/A"}`);
+            lines.push(`- End: ${endTime ? formatTime(endTime) : "N/A"}`);
+          }
+
+          return lines.join("\n");
+        });
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_rest_mode tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_rest_mode",
+    {
+      description:
+        "Get rest mode periods when you've enabled rest mode in the Oura app (typically during illness or recovery). Shows when rest mode was active and any notes.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to 30 days ago."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to today."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      try {
+        const endDate = end_date || getToday();
+        const startDate = start_date || getDaysAgo(30);
+
+        const response = await client.getRestModePeriods(startDate, endDate);
+
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No rest mode periods found between ${startDate} and ${endDate}. Rest mode is enabled manually in the Oura app when you need extra recovery time.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((rm: RestModePeriod) => {
+          const lines = [`## Rest Mode Period`];
+          lines.push(`- **Start:** ${rm.start_day}`);
+          if (rm.end_day) {
+            lines.push(`- **End:** ${rm.end_day}`);
+            // Calculate duration
+            const start = new Date(rm.start_day);
+            const end = new Date(rm.end_day);
+            const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+            lines.push(`- **Duration:** ${days} day${days > 1 ? "s" : ""}`);
+          } else {
+            lines.push("- **Status:** Currently active");
+          }
+
+          // Episodes within the rest mode period
+          if (rm.episodes && rm.episodes.length > 0) {
+            lines.push("");
+            lines.push("**Episodes:**");
+            for (const ep of rm.episodes) {
+              lines.push(`- ${ep.timestamp}: ${ep.tags?.join(", ") || "No tags"}`);
+            }
+          }
+
+          return lines.join("\n");
+        });
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_ring_info tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_ring_info",
+    {
+      description:
+        "Get information about your Oura ring hardware including model, color, firmware version, and configuration.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const response = await client.getRingConfiguration();
+
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: "No ring configuration found. Make sure your ring is set up in the Oura app.",
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((ring: RingConfiguration) => {
+          const lines = [`## Oura Ring`];
+
+          if (ring.color) {
+            lines.push(`- **Color:** ${ring.color}`);
+          }
+          if (ring.design) {
+            lines.push(`- **Design:** ${ring.design}`);
+          }
+          if (ring.firmware_version) {
+            lines.push(`- **Firmware:** ${ring.firmware_version}`);
+          }
+          if (ring.hardware_type) {
+            lines.push(`- **Hardware Type:** ${ring.hardware_type}`);
+          }
+          if (ring.set_up_at) {
+            lines.push(`- **Set Up:** ${ring.set_up_at}`);
+          }
+          if (ring.size !== undefined) {
+            lines.push(`- **Size:** ${ring.size}`);
+          }
+
+          return lines.join("\n");
+        });
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // get_personal_info tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_personal_info",
+    {
+      description:
+        "Get your Oura profile information including age, weight, height, and biological sex. This data is used by Oura to personalize insights.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const response: PersonalInfo = await client.getPersonalInfo();
+
+        const lines = [`## Personal Info`];
+
+        if (response.age !== undefined) {
+          lines.push(`- **Age:** ${response.age}`);
+        }
+        if (response.weight !== undefined) {
+          lines.push(`- **Weight:** ${response.weight} kg`);
+        }
+        if (response.height !== undefined) {
+          lines.push(`- **Height:** ${response.height} cm`);
+        }
+        if (response.biological_sex) {
+          lines.push(`- **Biological Sex:** ${response.biological_sex}`);
+        }
+        if (response.email) {
+          lines.push(`- **Email:** ${response.email}`);
+        }
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: lines.join("\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // analyze_temperature tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "analyze_temperature",
+    {
+      description:
+        "Analyze body temperature patterns from readiness data. Temperature deviations can indicate illness, menstrual cycle phases, or environmental factors. Shows trends and flags unusual readings.",
+      inputSchema: {
+        days: z.number().optional().describe("Number of days to analyze (default: 30)"),
+      },
+    },
+    async ({ days = 30 }) => {
+      try {
+        const endDate = getToday();
+        const startDate = getDaysAgo(days);
+
+        const response = await client.getDailyReadiness(startDate, endDate);
+        const data = response.data.filter(r => r.temperature_deviation !== null && r.temperature_deviation !== undefined);
+
+        if (data.length < 5) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Need at least 5 days of temperature data for analysis. Found ${data.length} days with temperature readings in the past ${days} days.`,
+              },
+            ],
+          };
+        }
+
+        const temps = data.map(r => r.temperature_deviation!);
+        const tempData = data.map(r => ({ date: r.day, value: r.temperature_deviation! }));
+
+        const lines = [
+          `## Body Temperature Analysis (${days} days)`,
+          "",
+        ];
+
+        // Overview
+        const stats = dispersion(temps);
+        lines.push("### Overview");
+        lines.push(`- **Current:** ${temps[temps.length - 1] >= 0 ? "+" : ""}${temps[temps.length - 1].toFixed(2)}°C from baseline`);
+        lines.push(`- **Average deviation:** ${stats.mean >= 0 ? "+" : ""}${stats.mean.toFixed(2)}°C`);
+        lines.push(`- **Range:** ${stats.min.toFixed(2)}°C to ${stats.max >= 0 ? "+" : ""}${stats.max.toFixed(2)}°C`);
+        lines.push("");
+
+        // Trend
+        const tempTrend = trend(temps);
+        lines.push("### Trend");
+        if (tempTrend.direction === "improving") {
+          // For temperature, "improving" means increasing (slope > 0)
+          lines.push("↑ Temperature is **trending up** - could indicate:");
+          lines.push("  - Onset of illness");
+          lines.push("  - Luteal phase (for menstrual cycles)");
+          lines.push("  - Increased stress or inflammation");
+        } else if (tempTrend.direction === "declining") {
+          lines.push("↓ Temperature is **trending down** - could indicate:");
+          lines.push("  - Recovery from illness");
+          lines.push("  - Follicular phase (for menstrual cycles)");
+          lines.push("  - Good recovery");
+        } else {
+          lines.push("→ Temperature is **stable**");
+        }
+        lines.push("");
+
+        // Elevated days (potential illness)
+        const elevatedDays = data.filter(r => r.temperature_deviation! > 0.5);
+        if (elevatedDays.length > 0) {
+          lines.push("### Elevated Days (>+0.5°C)");
+          lines.push("*May indicate illness, stress, or hormonal changes*");
+          lines.push("");
+          for (const day of elevatedDays.slice(-5)) {
+            lines.push(`- ${day.day}: +${day.temperature_deviation!.toFixed(2)}°C`);
+          }
+          if (elevatedDays.length > 5) {
+            lines.push(`- ... and ${elevatedDays.length - 5} more days`);
+          }
+          lines.push("");
+        }
+
+        // Weekly pattern
+        const dowAnalysis = dayOfWeekAnalysis(tempData);
+        lines.push("### Weekly Pattern");
+        lines.push(`- **Highest avg:** ${dowAnalysis.bestDay.day} (${dowAnalysis.bestDay.average >= 0 ? "+" : ""}${dowAnalysis.bestDay.average.toFixed(2)}°C)`);
+        lines.push(`- **Lowest avg:** ${dowAnalysis.worstDay.day} (${dowAnalysis.worstDay.average >= 0 ? "+" : ""}${dowAnalysis.worstDay.average.toFixed(2)}°C)`);
+        lines.push("");
+
+        // Body temperature contributor from readiness
+        const tempContributors = data
+          .filter(r => r.contributors?.body_temperature !== null && r.contributors?.body_temperature !== undefined)
+          .map(r => r.contributors!.body_temperature!);
+
+        if (tempContributors.length > 0) {
+          const avgContributor = tempContributors.reduce((a, b) => a + b, 0) / tempContributors.length;
+          lines.push("### Impact on Readiness");
+          lines.push(`- Average temperature contributor: ${Math.round(avgContributor)}/100`);
+          if (avgContributor < 70) {
+            lines.push("- ⚠ Temperature is negatively affecting your readiness");
+          } else {
+            lines.push("- ✓ Temperature is within healthy range for readiness");
           }
         }
 

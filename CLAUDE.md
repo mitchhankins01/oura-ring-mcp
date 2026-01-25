@@ -35,13 +35,15 @@ scripts/
 └── validate-fixtures.ts  # Compare test fixtures against real Oura API
 ```
 
-## Current Tools (21 available)
+## Current Tools (27 available)
 
 **Sleep & Recovery:**
 - `get_sleep` - Complete sleep data: score + detailed sessions (stages, efficiency, HR, HRV)
 - `get_daily_sleep` - Daily sleep scores with contributors only (use `get_sleep` for full data)
 - `get_readiness` - Daily readiness scores and recovery metrics
 - `get_resilience` - Body's capacity to recover from stress
+- `get_sleep_time` - Oura's personalized bedtime recommendations
+- `get_rest_mode` - Rest mode periods (illness/recovery tracking)
 
 **Activity & Fitness:**
 - `get_activity` - Daily activity, steps, calories, intensity breakdown
@@ -58,6 +60,8 @@ scripts/
 **User Data:**
 - `get_tags` - User-created tags and notes (simple format)
 - `get_enhanced_tags` - Rich tags with custom names, types, and time ranges
+- `get_personal_info` - User profile (age, weight, height, biological sex)
+- `get_ring_info` - Ring hardware info (color, firmware, size)
 
 **Smart Analysis (Phase 3):**
 - `detect_anomalies` - Find unusual readings using IQR + Z-score outlier detection
@@ -67,6 +71,8 @@ scripts/
 - `compare_conditions` - Compare metrics with/without conditions. Supports manual tags AND auto-tracked: 'workout', 'high_activity', 'low_activity', 'meditation'
 - `best_sleep_conditions` - Identify what conditions predict good vs poor sleep (activity, workouts, meditation sessions, tags)
 - `analyze_hrv_trend` - HRV trend analysis with rolling averages and recovery patterns
+- `analyze_adherence` - Track ring wear consistency and identify data gaps
+- `analyze_temperature` - Body temperature patterns (illness detection, cycles)
 
 ## MCP Resources
 
@@ -95,6 +101,16 @@ scripts/
   - Shows all tags with usage count and last used date
   - Helps Claude know what tags are available before using `compare_conditions` tool
 
+- **`oura://streaks`** - Current and best streaks for health goals (90 days)
+  - Fetches: `/daily_sleep`, `/daily_readiness`, `/daily_activity`
+  - Tracks consecutive days of optimal sleep (85+), readiness (85+), 10k steps, activity score (85+)
+  - Shows current streak and all-time best for each metric
+
+- **`oura://weekly-report`** - Comprehensive weekly health report with recommendations
+  - Fetches: `/daily_sleep`, `/sleep`, `/daily_readiness`, `/daily_activity` (this week + last week)
+  - Compares metrics to previous week, identifies highlights and concerns
+  - Generates personalized recommendations based on your data
+
 ## MCP Prompts (7 available)
 
 Pre-defined templates that guide Claude through common health analysis tasks:
@@ -120,7 +136,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 
 See [README.md](README.md#roadmap) for the full roadmap with detailed checklists.
 
-**Current status:** Phase 3 (Make it Smart) nearly complete. Smart tools, derived metrics, and prompts done. HRV-specific features out of scope (API limitation: no R-R intervals). Visualization data tools remain optional.
+**Current status:** Phase 3 (Make it Smart) complete. 27 tools, 7 resources, 7 prompts. All smart analysis tools done including adherence tracking, temperature analysis, streaks, and weekly report. HRV-specific features out of scope (API limitation: no R-R intervals).
 
 ## Key Files
 
