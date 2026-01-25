@@ -1,0 +1,43 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.mitchhankins01/oura-ring-mcp",
+  "description": "Connect your Oura Ring to Claude AI assistants. Health metrics with smart analysis tools.",
+  "repository": {
+    "url": "https://github.com/mitchhankins01/oura-ring-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "oura-ring-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Oura Personal Access Token (get from cloud.ouraring.com/personal-access-tokens)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "OURA_ACCESS_TOKEN"
+        },
+        {
+          "description": "OAuth Client ID (alternative to access token, from developer.ouraring.com)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "OURA_CLIENT_ID"
+        },
+        {
+          "description": "OAuth Client Secret (required with OURA_CLIENT_ID)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true,
+          "name": "OURA_CLIENT_SECRET"
+        }
+      ]
+    }
+  ]
+}
