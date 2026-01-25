@@ -677,4 +677,124 @@ export function registerResources(server: McpServer, client: OuraClient): void {
       };
     }
   );
+
+  // ─────────────────────────────────────────────────────────────
+  // oura://tag-summary - User's tags and their usage frequency
+  // ─────────────────────────────────────────────────────────────
+
+  server.registerResource(
+    "tag-summary",
+    "oura://tag-summary",
+    {
+      description: "Summary of your tags and their usage over the past 90 days. Use this to see what tags are available for analysis with compare_conditions tool.",
+      mimeType: "text/plain",
+    },
+    async () => {
+      const today = getToday();
+      const ninetyDaysAgo = getDaysAgo(90);
+      const sections: string[] = [];
+
+      sections.push(`# Your Tags (Last 90 Days)\n`);
+      sections.push(`*From ${ninetyDaysAgo} to ${today}*\n`);
+
+      // Fetch enhanced tags (they have more detail than regular tags)
+      const [enhancedTagsResult, tagsResult] = await Promise.allSettled([
+        client.getEnhancedTags(ninetyDaysAgo, today),
+        client.getTags(ninetyDaysAgo, today),
+      ]);
+
+      // Process enhanced tags
+      const enhancedTags = enhancedTagsResult.status === "fulfilled" ? enhancedTagsResult.value.data : [];
+      const regularTags = tagsResult.status === "fulfilled" ? tagsResult.value.data : [];
+
+      if (enhancedTags.length === 0 && regularTags.length === 0) {
+        sections.push("No tags found in the past 90 days.");
+        sections.push("");
+        sections.push("**Tip:** Add tags in the Oura app to track conditions like:");
+        sections.push("- Alcohol, caffeine, late meal");
+        sections.push("- Stressful day, travel, sick");
+        sections.push("- Exercise, meditation, supplements");
+        sections.push("");
+        sections.push("Tags help the `compare_conditions` tool analyze how different factors affect your sleep and recovery.");
+
+        return {
+          contents: [
+            {
+              uri: "oura://tag-summary",
+              mimeType: "text/plain",
+              text: sections.join("\n"),
+            },
+          ],
+        };
+      }
+
+      // Count tag frequency and track recent usage
+      const tagStats = new Map<string, { count: number; lastUsed: string; type?: string }>();
+
+      // Process enhanced tags (use start_day, have custom_name and tag_type_code)
+      for (const tag of enhancedTags) {
+        const name = tag.custom_name || tag.tag_type_code || "unknown";
+        const day = tag.start_day;
+        const existing = tagStats.get(name);
+        if (!existing) {
+          tagStats.set(name, {
+            count: 1,
+            lastUsed: day,
+            type: tag.tag_type_code || undefined,
+          });
+        } else {
+          existing.count++;
+          if (day > existing.lastUsed) {
+            existing.lastUsed = day;
+          }
+        }
+      }
+
+      // Also count regular tags (use day, have tags[] array)
+      for (const tag of regularTags) {
+        // Regular tags have a tags[] array of strings
+        for (const tagName of tag.tags) {
+          const existing = tagStats.get(tagName);
+          if (!existing) {
+            tagStats.set(tagName, {
+              count: 1,
+              lastUsed: tag.day,
+            });
+          } else {
+            existing.count++;
+            if (tag.day > existing.lastUsed) {
+              existing.lastUsed = tag.day;
+            }
+          }
+        }
+      }
+
+      // Sort by frequency (most used first)
+      const sortedTags = Array.from(tagStats.entries()).sort((a, b) => b[1].count - a[1].count);
+
+      sections.push(`## Tags (${sortedTags.length} unique)\n`);
+      sections.push("| Tag | Times Used | Last Used |");
+      sections.push("|-----|------------|-----------|");
+
+      for (const [name, stats] of sortedTags) {
+        sections.push(`| ${name} | ${stats.count} | ${stats.lastUsed} |`);
+      }
+
+      sections.push("");
+      sections.push("---");
+      sections.push("**Usage:** These tags can be used with the `compare_conditions` tool to analyze how different conditions affect your sleep and recovery.");
+      sections.push("");
+      sections.push("Example: `compare_conditions(tag: \"alcohol\", metric: \"hrv\")` to see how alcohol affects your HRV.");
+
+      return {
+        contents: [
+          {
+            uri: "oura://tag-summary",
+            mimeType: "text/plain",
+            text: sections.join("\n"),
+          },
+        ],
+      };
+    }
+  );
 }

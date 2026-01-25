@@ -102,13 +102,17 @@ Once connected, try asking Claude:
 | `get_tags` | User-created tags and notes |
 | `get_enhanced_tags` | Rich tags with custom names and types |
 
-### Smart Analysis (3 tools)
+### Smart Analysis (7 tools)
 
 | Tool | Description |
 |------|-------------|
 | `detect_anomalies` | Find unusual readings using statistical outlier detection |
 | `analyze_sleep_quality` | Comprehensive sleep analysis with trends, patterns, debt |
 | `correlate_metrics` | Find correlations between any two health metrics |
+| `compare_periods` | Compare metrics between two time periods (this week vs last) |
+| `compare_conditions` | Compare metrics with/without tags (alcohol vs no alcohol) |
+| `best_sleep_conditions` | Identify what predicts your good vs poor sleep nights |
+| `analyze_hrv_trend` | HRV trend analysis with rolling averages and patterns |
 
 ## MCP Resources
 
@@ -118,6 +122,7 @@ Once connected, try asking Claude:
 | `oura://weekly-summary` | Last 7 days summary with averages and trends |
 | `oura://baseline` | Your personal 30-day averages and normal ranges |
 | `oura://monthly-insights` | Comprehensive 30-day analysis with trends, patterns, anomalies |
+| `oura://tag-summary` | Your tags and usage frequency (helpful before using `compare_conditions`) |
 
 ## Development
 
@@ -212,10 +217,10 @@ See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and
 - [x] `detect_anomalies` - Flag unusual readings using IQR + Z-score
 - [x] `analyze_sleep_quality` - Comprehensive analysis with trends, patterns, debt
 - [x] `correlate_metrics` - Pearson correlation between any two metrics
-- [ ] `analyze_hrv_trend(days)` - Recovery trajectory
-- [ ] `compare_periods(period1, period2)` - This week vs last week
-- [ ] `compare_conditions(tag1, tag2, metric)` - Alcohol vs no alcohol
-- [ ] `best_sleep_conditions()` - What predicts your good nights
+- [x] `analyze_hrv_trend(days)` - Recovery trajectory
+- [x] `compare_periods(period1, period2)` - This week vs last week
+- [x] `compare_conditions(tag, metric)` - With tag vs without tag comparison
+- [x] `best_sleep_conditions()` - What predicts your good nights
 
 **Visualization-ready data (for Claude artifacts):**
 - [ ] Sleep stages stackplot data (Oura app style)

@@ -34,7 +34,7 @@ scripts/
 └── validate-fixtures.ts  # Compare test fixtures against real Oura API
 ```
 
-## Current Tools (17 available)
+## Current Tools (21 available)
 
 **Sleep & Recovery:**
 - `get_sleep` - Complete sleep data: score + detailed sessions (stages, efficiency, HR, HRV)
@@ -62,6 +62,10 @@ scripts/
 - `detect_anomalies` - Find unusual readings using IQR + Z-score outlier detection
 - `analyze_sleep_quality` - Comprehensive sleep analysis: trends, patterns, debt, regularity
 - `correlate_metrics` - Find correlations between any two metrics with p-value
+- `compare_periods` - Compare metrics between two time periods (e.g., this week vs last week)
+- `compare_conditions` - Compare metrics with/without tags (e.g., alcohol vs no alcohol)
+- `best_sleep_conditions` - Identify what conditions predict good vs poor sleep
+- `analyze_hrv_trend` - HRV trend analysis with rolling averages and recovery patterns
 
 ## MCP Resources
 
@@ -84,6 +88,11 @@ scripts/
   - Fetches: `/sleep`, `/daily_readiness`, `/daily_activity`
   - Uses analysis utilities: `sleepDebt()`, `sleepRegularity()`, `dayOfWeekAnalysis()`, `trend()`, `detectOutliers()`
   - Generates actionable insights about patterns, anomalies, and trends
+
+- **`oura://tag-summary`** - User's tags and usage frequency (90 days)
+  - Fetches: `/enhanced_tag`, `/tag`
+  - Shows all tags with usage count and last used date
+  - Helps Claude know what tags are available before using `compare_conditions` tool
 
 ## Notes
 

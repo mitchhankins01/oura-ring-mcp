@@ -90,8 +90,8 @@ describe("Tool Handlers", () => {
   // ─────────────────────────────────────────────────────────────
 
   describe("registerTools", () => {
-    it("should register all 17 tools", () => {
-      expect(mockServer.getToolCount()).toBe(17);
+    it("should register all 21 tools", () => {
+      expect(mockServer.getToolCount()).toBe(21);
     });
 
     it("should register expected tool names", () => {
@@ -115,6 +115,10 @@ describe("Tool Handlers", () => {
         "detect_anomalies",
         "analyze_sleep_quality",
         "correlate_metrics",
+        "compare_periods",
+        "compare_conditions",
+        "best_sleep_conditions",
+        "analyze_hrv_trend",
       ];
 
       expectedTools.forEach((toolName) => {
@@ -1374,7 +1378,566 @@ describe("Tool Handlers", () => {
   });
 
   // ─────────────────────────────────────────────────────────────
-  // Date range handling
+  // compare_periods tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("compare_periods", () => {
+    it("should compare sleep duration between two periods", async () => {
+      const period1Data = {
+        data: Array.from({ length: 7 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          total_sleep_duration: 25200 + i * 600, // 7h base + increasing
+          average_hrv: 45 + i,
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+      const period2Data = {
+        data: Array.from({ length: 7 }, (_, i) => ({
+          day: `2024-01-${String(i + 8).padStart(2, "0")}`,
+          total_sleep_duration: 21600 + i * 600, // 6h base + increasing
+          average_hrv: 40 + i,
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn()
+          .mockResolvedValueOnce(period1Data)
+          .mockResolvedValueOnce(period2Data),
+        getDailySleep: vi.fn()
+          .mockResolvedValueOnce({ data: [], next_token: null })
+          .mockResolvedValueOnce({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_periods")!;
+      const result = await handler({
+        period1_start: "2024-01-01",
+        period1_end: "2024-01-07",
+        period2_start: "2024-01-08",
+        period2_end: "2024-01-14",
+      });
+
+      expect(result.content[0].text).toContain("Period Comparison");
+      expect(result.content[0].text).toContain("Period 1");
+      expect(result.content[0].text).toContain("Period 2");
+      expect(result.content[0].text).toContain("Sleep Duration");
+    });
+
+    it("should show percentage changes", async () => {
+      const period1Data = {
+        data: [{ day: "2024-01-01", total_sleep_duration: 28800, average_hrv: 50, type: "long_sleep" as const }],
+        next_token: null,
+      };
+      const period2Data = {
+        data: [{ day: "2024-01-08", total_sleep_duration: 25200, average_hrv: 45, type: "long_sleep" as const }],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn()
+          .mockResolvedValueOnce(period1Data)
+          .mockResolvedValueOnce(period2Data),
+        getDailySleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_periods")!;
+      const result = await handler({
+        period1_start: "2024-01-01",
+        period1_end: "2024-01-01",
+        period2_start: "2024-01-08",
+        period2_end: "2024-01-08",
+      });
+
+      expect(result.content[0].text).toContain("%");
+    });
+
+    it("should handle empty periods", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailySleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailyReadiness: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getDailyActivity: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_periods")!;
+      const result = await handler({
+        period1_start: "2024-01-01",
+        period1_end: "2024-01-07",
+        period2_start: "2024-01-08",
+        period2_end: "2024-01-14",
+      });
+
+      expect(result.content[0].text).toContain("No data available");
+    });
+
+    it("should handle errors gracefully", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockRejectedValue(new Error("API error")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_periods")!;
+      const result = await handler({
+        period1_start: "2024-01-01",
+        period1_end: "2024-01-07",
+        period2_start: "2024-01-08",
+        period2_end: "2024-01-14",
+      });
+
+      expect(result.content[0].text).toContain("API error");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // compare_conditions tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("compare_conditions", () => {
+    it("should compare sleep with and without a tag", async () => {
+      const tagsData = {
+        data: [
+          { id: "1", tag_type_code: "tag_generic_alcohol", custom_name: null, start_day: "2024-01-01", start_time: "2024-01-01T20:00:00Z" },
+          { id: "2", tag_type_code: "tag_generic_alcohol", custom_name: null, start_day: "2024-01-03", start_time: "2024-01-03T20:00:00Z" },
+        ],
+        next_token: null,
+      };
+      const sleepData = {
+        data: [
+          { day: "2024-01-01", total_sleep_duration: 21600, type: "long_sleep" }, // 6h with alcohol
+          { day: "2024-01-02", total_sleep_duration: 28800, type: "long_sleep" }, // 8h no alcohol
+          { day: "2024-01-03", total_sleep_duration: 23400, type: "long_sleep" }, // 6.5h with alcohol
+          { day: "2024-01-04", total_sleep_duration: 27000, type: "long_sleep" }, // 7.5h no alcohol
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getEnhancedTags: vi.fn().mockResolvedValue(tagsData),
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "alcohol", metric: "sleep_duration", days: 30 });
+
+      expect(result.content[0].text).toContain("Condition Comparison");
+      expect(result.content[0].text).toContain("alcohol");
+      expect(result.content[0].text).toContain("With");
+      expect(result.content[0].text).toContain("Without");
+    });
+
+    it("should show impact interpretation", async () => {
+      const tagsData = {
+        data: [
+          { id: "1", tag_type_code: "tag_generic_caffeine", custom_name: null, start_day: "2024-01-01", start_time: "2024-01-01T14:00:00Z" },
+          { id: "2", tag_type_code: "tag_generic_caffeine", custom_name: null, start_day: "2024-01-02", start_time: "2024-01-02T14:00:00Z" },
+        ],
+        next_token: null,
+      };
+      const sleepData = {
+        data: [
+          { day: "2024-01-01", total_sleep_duration: 21600, type: "long_sleep" },
+          { day: "2024-01-02", total_sleep_duration: 21600, type: "long_sleep" },
+          { day: "2024-01-03", total_sleep_duration: 28800, type: "long_sleep" },
+          { day: "2024-01-04", total_sleep_duration: 28800, type: "long_sleep" },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getEnhancedTags: vi.fn().mockResolvedValue(tagsData),
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "caffeine", metric: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("impact");
+    });
+
+    it("should handle no matching tags", async () => {
+      mockClient = createMockClient({
+        getEnhancedTags: vi.fn().mockResolvedValue({
+          data: [{ id: "1", tag_type_code: "tag_other", custom_name: null, start_day: "2024-01-01" }],
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "alcohol", metric: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("No \"alcohol\" tags found");
+    });
+
+    it("should handle no tags at all", async () => {
+      mockClient = createMockClient({
+        getEnhancedTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("compare_conditions")!;
+      const result = await handler({ tag: "alcohol", metric: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("No tags found");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // best_sleep_conditions tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("best_sleep_conditions", () => {
+    it("should analyze conditions for good vs poor sleep", async () => {
+      const sleepData = {
+        data: Array.from({ length: 15 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          total_sleep_duration: 25200,
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+      const scoresData = {
+        data: Array.from({ length: 15 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          score: i < 4 ? 90 : i > 11 ? 60 : 75, // first 4 good, last 3 poor
+        })),
+        next_token: null,
+      };
+      const activityData = {
+        data: Array.from({ length: 15 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          steps: i < 4 ? 10000 : 5000,
+          active_calories: i < 4 ? 500 : 200,
+        })),
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue(scoresData),
+        getDailyActivity: vi.fn().mockResolvedValue(activityData),
+        getEnhancedTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("best_sleep_conditions")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("Best Sleep Conditions");
+      expect(result.content[0].text).toContain("Activity Patterns");
+      expect(result.content[0].text).toContain("Good Nights");
+      expect(result.content[0].text).toContain("Poor Nights");
+    });
+
+    it("should show day of week patterns", async () => {
+      const sleepData = {
+        data: Array.from({ length: 14 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          total_sleep_duration: 25200,
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+      const scoresData = {
+        data: Array.from({ length: 14 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          score: 70 + (i % 7) * 5, // varies by day of week
+        })),
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue(scoresData),
+        getDailyActivity: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getEnhancedTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("best_sleep_conditions")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Day of Week");
+    });
+
+    it("should handle insufficient data", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue({
+          data: Array.from({ length: 5 }, (_, i) => ({
+            day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+            total_sleep_duration: 25200,
+            type: "long_sleep",
+          })),
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("best_sleep_conditions")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Need at least 10 nights");
+    });
+
+    it("should show tag impact with good and poor sleep indicators", async () => {
+      const sleepData = {
+        data: Array.from({ length: 20 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          total_sleep_duration: 25200,
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+      // Sleep scores: first 5 good (90), days 6-10 poor (55), rest mixed
+      const scoresData = {
+        data: Array.from({ length: 20 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          score: i < 5 ? 90 : i < 10 ? 55 : 75,
+        })),
+        next_token: null,
+      };
+      // Tags: "meditation" on good days, "alcohol" on poor days
+      const tagsData = {
+        data: [
+          // Meditation on good sleep days (3 uses, 100% good rate)
+          { id: "1", tag_type_code: "meditation", start_day: "2024-01-01" },
+          { id: "2", tag_type_code: "meditation", start_day: "2024-01-02" },
+          { id: "3", tag_type_code: "meditation", start_day: "2024-01-03" },
+          // Alcohol on poor sleep days (3 uses, 0% good rate)
+          { id: "4", tag_type_code: "alcohol", start_day: "2024-01-06" },
+          { id: "5", tag_type_code: "alcohol", start_day: "2024-01-07" },
+          { id: "6", tag_type_code: "alcohol", start_day: "2024-01-08" },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+        getDailySleep: vi.fn().mockResolvedValue(scoresData),
+        getDailyActivity: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getEnhancedTags: vi.fn().mockResolvedValue(tagsData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("best_sleep_conditions")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("Tag Impact");
+      expect(result.content[0].text).toContain("meditation");
+      expect(result.content[0].text).toContain("alcohol");
+      expect(result.content[0].text).toContain("associated with good sleep");
+      expect(result.content[0].text).toContain("associated with poor sleep");
+    });
+
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // analyze_hrv_trend tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("analyze_hrv_trend", () => {
+    it("should analyze HRV trend with sufficient data", async () => {
+      const sleepData = {
+        data: Array.from({ length: 14 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          average_hrv: 40 + i, // increasing trend
+          total_sleep_duration: 25200,
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_hrv_trend")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("HRV Trend Analysis");
+      expect(result.content[0].text).toContain("Overview");
+      expect(result.content[0].text).toContain("Average:");
+      expect(result.content[0].text).toContain("Trend");
+    });
+
+    it("should show rolling averages", async () => {
+      const sleepData = {
+        data: Array.from({ length: 14 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          average_hrv: 45 + (i % 5),
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_hrv_trend")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Rolling Averages");
+      expect(result.content[0].text).toContain("Last 7 days:");
+    });
+
+    it("should show weekly patterns", async () => {
+      const sleepData = {
+        data: Array.from({ length: 14 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          average_hrv: 40 + (i % 7) * 3, // varies by day of week
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_hrv_trend")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Weekly Pattern");
+      expect(result.content[0].text).toContain("Best HRV:");
+      expect(result.content[0].text).toContain("Lowest HRV:");
+    });
+
+    it("should handle insufficient data", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue({
+          data: [
+            { day: "2024-01-01", average_hrv: 45, type: "long_sleep" },
+            { day: "2024-01-02", average_hrv: 47, type: "long_sleep" },
+          ],
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_hrv_trend")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Need at least 5 nights");
+    });
+
+    it("should handle errors gracefully", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockRejectedValue(new Error("HRV API error")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_hrv_trend")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("HRV API error");
+    });
+
+    it("should show unusual nights when outliers detected", async () => {
+      // Create data with clear outliers (one very low, one very high)
+      const sleepData = {
+        data: [
+          { day: "2024-01-01", average_hrv: 45, type: "long_sleep" as const },
+          { day: "2024-01-02", average_hrv: 46, type: "long_sleep" as const },
+          { day: "2024-01-03", average_hrv: 44, type: "long_sleep" as const },
+          { day: "2024-01-04", average_hrv: 47, type: "long_sleep" as const },
+          { day: "2024-01-05", average_hrv: 45, type: "long_sleep" as const },
+          { day: "2024-01-06", average_hrv: 46, type: "long_sleep" as const },
+          { day: "2024-01-07", average_hrv: 15, type: "long_sleep" as const }, // Very low outlier
+          { day: "2024-01-08", average_hrv: 44, type: "long_sleep" as const },
+          { day: "2024-01-09", average_hrv: 45, type: "long_sleep" as const },
+          { day: "2024-01-10", average_hrv: 90, type: "long_sleep" as const }, // Very high outlier
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_hrv_trend")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Unusual Nights");
+      expect(result.content[0].text).toMatch(/unusually (low|high)/);
+    });
+
+    it("should show 30-day rolling average with sufficient data", async () => {
+      // Create 35 days of data spanning Jan and Feb
+      const sleepData = {
+        data: [
+          ...Array.from({ length: 31 }, (_, i) => ({
+            day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+            average_hrv: 45 + (i % 5),
+            type: "long_sleep" as const,
+          })),
+          ...Array.from({ length: 4 }, (_, i) => ({
+            day: `2024-02-${String(i + 1).padStart(2, "0")}`,
+            average_hrv: 45 + (i % 5),
+            type: "long_sleep" as const,
+          })),
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_hrv_trend")!;
+      const result = await handler({ days: 60 });
+
+      expect(result.content[0].text).toContain("Last 30 days:");
+    });
+
+    it("should warn when recent HRV is below baseline", async () => {
+      // Create data where recent values are significantly lower
+      const sleepData = {
+        data: [
+          // First 14 days with higher HRV (establishing baseline)
+          ...Array.from({ length: 14 }, (_, i) => ({
+            day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+            average_hrv: 55,
+            type: "long_sleep" as const,
+          })),
+          // Last 7 days with much lower HRV
+          ...Array.from({ length: 7 }, (_, i) => ({
+            day: `2024-01-${String(i + 15).padStart(2, "0")}`,
+            average_hrv: 40,
+            type: "long_sleep" as const,
+          })),
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_hrv_trend")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("below baseline");
+      expect(result.content[0].text).toContain("may need more recovery");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // get_heart_rate edge cases
   // ─────────────────────────────────────────────────────────────
 
   describe("date range handling", () => {

@@ -1358,6 +1358,726 @@ export function registerTools(server: McpServer, client: OuraClient) {
       }
     }
   );
+
+  // ─────────────────────────────────────────────────────────────
+  // compare_periods tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "compare_periods",
+    {
+      description:
+        "Compare health metrics between two time periods. Great for answering questions like 'How did I sleep this week vs last week?' or 'Was my HRV better last month?'. Returns side-by-side comparison with percentage changes.",
+      inputSchema: {
+        period1_start: z.string().describe("Start date of first period (YYYY-MM-DD)"),
+        period1_end: z.string().describe("End date of first period (YYYY-MM-DD)"),
+        period2_start: z.string().describe("Start date of second period (YYYY-MM-DD)"),
+        period2_end: z.string().describe("End date of second period (YYYY-MM-DD)"),
+        metrics: z
+          .array(z.enum(["sleep_duration", "sleep_score", "deep_sleep", "rem_sleep", "hrv", "heart_rate", "efficiency", "readiness", "activity", "steps"]))
+          .optional()
+          .describe("Which metrics to compare (default: all available)"),
+      },
+    },
+    async ({ period1_start, period1_end, period2_start, period2_end, metrics }) => {
+      try {
+        // Fetch data for both periods in parallel
+        const [sleep1, sleep2, readiness1, readiness2, activity1, activity2, scores1, scores2] = await Promise.all([
+          client.getSleep(period1_start, period1_end),
+          client.getSleep(period2_start, period2_end),
+          client.getDailyReadiness(period1_start, period1_end),
+          client.getDailyReadiness(period2_start, period2_end),
+          client.getDailyActivity(period1_start, period1_end),
+          client.getDailyActivity(period2_start, period2_end),
+          client.getDailySleep(period1_start, period1_end),
+          client.getDailySleep(period2_start, period2_end),
+        ]);
+
+        // Filter to main sleep sessions only
+        const sessions1 = sleep1.data.filter((s) => s.type === "long_sleep");
+        const sessions2 = sleep2.data.filter((s) => s.type === "long_sleep");
+
+        const allMetrics = ["sleep_duration", "sleep_score", "deep_sleep", "rem_sleep", "hrv", "heart_rate", "efficiency", "readiness", "activity", "steps"];
+        const metricsToCompare = metrics || allMetrics;
+
+        type ComparisonRow = { metric: string; period1: string; period2: string; change: string; arrow: string };
+        const comparisons: ComparisonRow[] = [];
+
+        // Helper to calculate comparison
+        const addComparison = (name: string, values1: number[], values2: number[], unit: string, decimals = 0) => {
+          if (values1.length === 0 || values2.length === 0) return;
+          const avg1 = mean(values1);
+          const avg2 = mean(values2);
+          const change = avg2 !== 0 ? ((avg1 - avg2) / avg2) * 100 : 0;
+          const arrow = change > 2 ? "↑" : change < -2 ? "↓" : "→";
+          comparisons.push({
+            metric: name,
+            period1: decimals > 0 ? `${avg1.toFixed(decimals)}${unit}` : `${Math.round(avg1)}${unit}`,
+            period2: decimals > 0 ? `${avg2.toFixed(decimals)}${unit}` : `${Math.round(avg2)}${unit}`,
+            change: `${change >= 0 ? "+" : ""}${change.toFixed(0)}%`,
+            arrow,
+          });
+        };
+
+        if (metricsToCompare.includes("sleep_duration")) {
+          const durations1 = sessions1.map((s) => (s.total_sleep_duration ?? 0) / 3600);
+          const durations2 = sessions2.map((s) => (s.total_sleep_duration ?? 0) / 3600);
+          addComparison("Sleep Duration", durations1, durations2, "h", 1);
+        }
+
+        if (metricsToCompare.includes("sleep_score")) {
+          const scores1Vals = scores1.data.filter((s) => s.score != null).map((s) => s.score!);
+          const scores2Vals = scores2.data.filter((s) => s.score != null).map((s) => s.score!);
+          addComparison("Sleep Score", scores1Vals, scores2Vals, "");
+        }
+
+        if (metricsToCompare.includes("deep_sleep")) {
+          const deep1 = sessions1.filter((s) => s.deep_sleep_duration != null).map((s) => s.deep_sleep_duration! / 3600);
+          const deep2 = sessions2.filter((s) => s.deep_sleep_duration != null).map((s) => s.deep_sleep_duration! / 3600);
+          addComparison("Deep Sleep", deep1, deep2, "h", 1);
+        }
+
+        if (metricsToCompare.includes("rem_sleep")) {
+          const rem1 = sessions1.filter((s) => s.rem_sleep_duration != null).map((s) => s.rem_sleep_duration! / 3600);
+          const rem2 = sessions2.filter((s) => s.rem_sleep_duration != null).map((s) => s.rem_sleep_duration! / 3600);
+          addComparison("REM Sleep", rem1, rem2, "h", 1);
+        }
+
+        if (metricsToCompare.includes("hrv")) {
+          const hrv1 = sessions1.filter((s) => s.average_hrv != null).map((s) => s.average_hrv!);
+          const hrv2 = sessions2.filter((s) => s.average_hrv != null).map((s) => s.average_hrv!);
+          addComparison("HRV", hrv1, hrv2, " ms");
+        }
+
+        if (metricsToCompare.includes("heart_rate")) {
+          const hr1 = sessions1.filter((s) => s.average_heart_rate != null).map((s) => s.average_heart_rate!);
+          const hr2 = sessions2.filter((s) => s.average_heart_rate != null).map((s) => s.average_heart_rate!);
+          addComparison("Resting HR", hr1, hr2, " bpm");
+        }
+
+        if (metricsToCompare.includes("efficiency")) {
+          const eff1 = sessions1.filter((s) => s.efficiency != null).map((s) => s.efficiency!);
+          const eff2 = sessions2.filter((s) => s.efficiency != null).map((s) => s.efficiency!);
+          addComparison("Efficiency", eff1, eff2, "%");
+        }
+
+        if (metricsToCompare.includes("readiness")) {
+          const read1 = readiness1.data.filter((r) => r.score != null).map((r) => r.score!);
+          const read2 = readiness2.data.filter((r) => r.score != null).map((r) => r.score!);
+          addComparison("Readiness", read1, read2, "");
+        }
+
+        if (metricsToCompare.includes("activity")) {
+          const act1 = activity1.data.filter((a) => a.score != null).map((a) => a.score!);
+          const act2 = activity2.data.filter((a) => a.score != null).map((a) => a.score!);
+          addComparison("Activity", act1, act2, "");
+        }
+
+        if (metricsToCompare.includes("steps")) {
+          const steps1 = activity1.data.map((a) => a.steps);
+          const steps2 = activity2.data.map((a) => a.steps);
+          addComparison("Steps", steps1, steps2, "");
+        }
+
+        if (comparisons.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: "No data available for comparison in the specified periods." }],
+          };
+        }
+
+        const lines = [
+          `## Period Comparison`,
+          "",
+          `**Period 1:** ${period1_start} to ${period1_end}`,
+          `**Period 2:** ${period2_start} to ${period2_end}`,
+          "",
+          "| Metric | Period 1 | Period 2 | Change |",
+          "|--------|----------|----------|--------|",
+        ];
+
+        comparisons.forEach((c) => {
+          lines.push(`| ${c.metric} | ${c.period1} | ${c.period2} | ${c.arrow} ${c.change} |`);
+        });
+
+        // Summary
+        const improvements = comparisons.filter((c) => c.arrow === "↑").length;
+        const declines = comparisons.filter((c) => c.arrow === "↓").length;
+        lines.push("");
+        if (improvements > declines) {
+          lines.push(`→ Period 1 shows overall improvement (${improvements} metrics up, ${declines} down)`);
+        } else if (declines > improvements) {
+          lines.push(`→ Period 1 shows some decline (${improvements} metrics up, ${declines} down)`);
+        } else {
+          lines.push(`→ Periods are relatively similar`);
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // compare_conditions tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "compare_conditions",
+    {
+      description:
+        "Compare a health metric across different conditions using your tags. For example, compare sleep quality on nights after alcohol vs no alcohol, or with/without caffeine. Requires enhanced tags to be set in the Oura app.",
+      inputSchema: {
+        tag: z.string().describe("Tag to compare (e.g., 'alcohol', 'caffeine', 'late_meal', or custom tag name)"),
+        metric: z.enum(["sleep_duration", "sleep_score", "deep_sleep", "rem_sleep", "hrv", "heart_rate", "efficiency", "readiness"]).describe("Metric to compare"),
+        days: z.number().optional().describe("Number of days to analyze (default: 90)"),
+      },
+    },
+    async ({ tag, metric, days = 90 }) => {
+      try {
+        const endDate = getToday();
+        const startDate = getDaysAgo(days);
+
+        // Fetch tags and sleep data
+        const [tagsResult, sleepResult, scoresResult, readinessResult] = await Promise.allSettled([
+          client.getEnhancedTags(startDate, endDate),
+          client.getSleep(startDate, endDate),
+          client.getDailySleep(startDate, endDate),
+          client.getDailyReadiness(startDate, endDate),
+        ]);
+
+        const tags = tagsResult.status === "fulfilled" ? tagsResult.value.data : [];
+        const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
+        const sessions = allSleep.filter((s) => s.type === "long_sleep");
+        const scores = scoresResult.status === "fulfilled" ? scoresResult.value.data : [];
+        const readiness = readinessResult.status === "fulfilled" ? readinessResult.value.data : [];
+
+        if (tags.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No tags found in the past ${days} days. Use enhanced tags in the Oura app to track factors like alcohol, caffeine, or custom conditions.`,
+              },
+            ],
+          };
+        }
+
+        // Find days with the specified tag (match by custom_name or tag_type_code)
+        const tagLower = tag.toLowerCase();
+        const daysWithTag = new Set(
+          tags
+            .filter((t) => {
+              const customMatch = t.custom_name?.toLowerCase().includes(tagLower);
+              const codeMatch = t.tag_type_code?.toLowerCase().includes(tagLower);
+              return customMatch || codeMatch;
+            })
+            .map((t) => t.start_day)
+        );
+
+        if (daysWithTag.size === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No "${tag}" tags found. Available tags in this period: ${[...new Set(tags.map((t) => t.custom_name || t.tag_type_code))].join(", ")}`,
+              },
+            ],
+          };
+        }
+
+        // Create lookup maps
+        const sleepByDay = new Map(sessions.map((s) => [s.day, s]));
+        const scoresByDay = new Map(scores.map((s) => [s.day, s]));
+        const readinessByDay = new Map(readiness.map((r) => [r.day, r]));
+
+        // Get metric values for days with and without tag
+        const getMetricValue = (day: string): number | null => {
+          const sleep = sleepByDay.get(day);
+          const score = scoresByDay.get(day);
+          const read = readinessByDay.get(day);
+
+          switch (metric) {
+            case "sleep_duration":
+              return sleep?.total_sleep_duration ? sleep.total_sleep_duration / 3600 : null;
+            case "sleep_score":
+              return score?.score ?? null;
+            case "deep_sleep":
+              return sleep?.deep_sleep_duration ? sleep.deep_sleep_duration / 3600 : null;
+            case "rem_sleep":
+              return sleep?.rem_sleep_duration ? sleep.rem_sleep_duration / 3600 : null;
+            case "hrv":
+              return sleep?.average_hrv ?? null;
+            case "heart_rate":
+              return sleep?.average_heart_rate ?? null;
+            case "efficiency":
+              return sleep?.efficiency ?? null;
+            case "readiness":
+              return read?.score ?? null;
+            default:
+              return null;
+          }
+        };
+
+        const withTagValues: number[] = [];
+        const withoutTagValues: number[] = [];
+
+        // Get all days with data
+        const allDays = new Set([...sessions.map((s) => s.day), ...scores.map((s) => s.day), ...readiness.map((r) => r.day)]);
+
+        for (const day of allDays) {
+          const value = getMetricValue(day);
+          if (value === null) continue;
+
+          if (daysWithTag.has(day)) {
+            withTagValues.push(value);
+          } else {
+            withoutTagValues.push(value);
+          }
+        }
+
+        if (withTagValues.length < 2 || withoutTagValues.length < 2) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Not enough data to compare. Found ${withTagValues.length} days with "${tag}" and ${withoutTagValues.length} days without.`,
+              },
+            ],
+          };
+        }
+
+        const avgWith = mean(withTagValues);
+        const avgWithout = mean(withoutTagValues);
+        const difference = avgWith - avgWithout;
+        const percentDiff = (difference / avgWithout) * 100;
+
+        const metricLabels: Record<string, { name: string; unit: string; decimals: number; higherIsBetter: boolean }> = {
+          sleep_duration: { name: "Sleep Duration", unit: "h", decimals: 1, higherIsBetter: true },
+          sleep_score: { name: "Sleep Score", unit: "", decimals: 0, higherIsBetter: true },
+          deep_sleep: { name: "Deep Sleep", unit: "h", decimals: 1, higherIsBetter: true },
+          rem_sleep: { name: "REM Sleep", unit: "h", decimals: 1, higherIsBetter: true },
+          hrv: { name: "HRV", unit: " ms", decimals: 0, higherIsBetter: true },
+          heart_rate: { name: "Resting HR", unit: " bpm", decimals: 0, higherIsBetter: false },
+          efficiency: { name: "Efficiency", unit: "%", decimals: 0, higherIsBetter: true },
+          readiness: { name: "Readiness", unit: "", decimals: 0, higherIsBetter: true },
+        };
+
+        const m = metricLabels[metric];
+        const formatVal = (v: number) => (m.decimals > 0 ? v.toFixed(m.decimals) : Math.round(v).toString()) + m.unit;
+
+        const lines = [
+          `## Condition Comparison: ${tag}`,
+          "",
+          `**Metric:** ${m.name}`,
+          `**Period:** Last ${days} days`,
+          "",
+          `| Condition | Avg ${m.name} | Days |`,
+          `|-----------|${"-".repeat(m.name.length + 6)}|------|`,
+          `| With "${tag}" | ${formatVal(avgWith)} | ${withTagValues.length} |`,
+          `| Without "${tag}" | ${formatVal(avgWithout)} | ${withoutTagValues.length} |`,
+          "",
+          `**Difference:** ${difference >= 0 ? "+" : ""}${formatVal(difference)} (${percentDiff >= 0 ? "+" : ""}${percentDiff.toFixed(0)}%)`,
+          "",
+        ];
+
+        // Interpretation
+        const isBetter = m.higherIsBetter ? difference > 0 : difference < 0;
+        const isWorse = m.higherIsBetter ? difference < 0 : difference > 0;
+        const isSignificant = Math.abs(percentDiff) > 5;
+
+        if (isSignificant && isWorse) {
+          lines.push(`⚠ "${tag}" appears to negatively impact your ${m.name.toLowerCase()}.`);
+        } else if (isSignificant && isBetter) {
+          lines.push(`✓ "${tag}" appears to positively impact your ${m.name.toLowerCase()}.`);
+        } else {
+          lines.push(`→ "${tag}" doesn't show a significant impact on your ${m.name.toLowerCase()}.`);
+        }
+
+        lines.push("");
+        lines.push("*Note: Correlation doesn't imply causation. Other factors may be involved.*");
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // best_sleep_conditions tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "best_sleep_conditions",
+    {
+      description:
+        "Analyze what conditions are associated with your best sleep nights. Looks at activity levels, tags, and patterns to identify what predicts good vs poor sleep.",
+      inputSchema: {
+        days: z.number().optional().describe("Number of days to analyze (default: 60)"),
+      },
+    },
+    async ({ days = 60 }) => {
+      try {
+        const endDate = getToday();
+        const startDate = getDaysAgo(days);
+
+        // Fetch all relevant data
+        const [sleepResult, scoresResult, activityResult, tagsResult] = await Promise.allSettled([
+          client.getSleep(startDate, endDate),
+          client.getDailySleep(startDate, endDate),
+          client.getDailyActivity(startDate, endDate),
+          client.getEnhancedTags(startDate, endDate),
+        ]);
+
+        const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
+        const sessions = allSleep.filter((s) => s.type === "long_sleep");
+        const scores = scoresResult.status === "fulfilled" ? scoresResult.value.data : [];
+        const activity = activityResult.status === "fulfilled" ? activityResult.value.data : [];
+        const tags = tagsResult.status === "fulfilled" ? tagsResult.value.data : [];
+
+        if (sessions.length < 10) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Need at least 10 nights of sleep data for meaningful analysis. Found ${sessions.length} nights in the past ${days} days.`,
+              },
+            ],
+          };
+        }
+
+        // Create lookup maps
+        const scoresByDay = new Map(scores.map((s) => [s.day, s.score ?? 0]));
+        const activityByDay = new Map(activity.map((a) => [a.day, a]));
+        const tagsByDay = new Map<string, string[]>();
+        tags.forEach((t) => {
+          const existing = tagsByDay.get(t.start_day) || [];
+          existing.push(t.custom_name || t.tag_type_code || "unknown");
+          tagsByDay.set(t.start_day, existing);
+        });
+
+        // Classify nights as good, average, or poor based on sleep score quartiles
+        const allScores = sessions.map((s) => scoresByDay.get(s.day) ?? 0).filter((s) => s > 0);
+        if (allScores.length < 10) {
+          return {
+            content: [{ type: "text" as const, text: "Not enough sleep score data for analysis." }],
+          };
+        }
+
+        const sortedScores = [...allScores].sort((a, b) => a - b);
+        const q25 = sortedScores[Math.floor(sortedScores.length * 0.25)];
+        const q75 = sortedScores[Math.floor(sortedScores.length * 0.75)];
+
+        type NightData = { day: string; score: number; activity: DailyActivity | undefined; tags: string[] };
+        const goodNights: NightData[] = [];
+        const poorNights: NightData[] = [];
+
+        sessions.forEach((s) => {
+          const score = scoresByDay.get(s.day) ?? 0;
+          if (score === 0) return;
+
+          const data: NightData = {
+            day: s.day,
+            score,
+            activity: activityByDay.get(s.day),
+            tags: tagsByDay.get(s.day) || [],
+          };
+
+          if (score >= q75) {
+            goodNights.push(data);
+          } else if (score <= q25) {
+            poorNights.push(data);
+          }
+        });
+
+        const lines = [
+          `## Best Sleep Conditions Analysis`,
+          "",
+          `*Based on ${sessions.length} nights over ${days} days*`,
+          "",
+          `**Sleep Score Thresholds:**`,
+          `- Good nights (top 25%): score ≥ ${q75}`,
+          `- Poor nights (bottom 25%): score ≤ ${q25}`,
+          "",
+        ];
+
+        // Activity comparison
+        const goodActivity = goodNights.filter((n) => n.activity).map((n) => n.activity!);
+        const poorActivity = poorNights.filter((n) => n.activity).map((n) => n.activity!);
+
+        if (goodActivity.length >= 3 && poorActivity.length >= 3) {
+          lines.push("### Activity Patterns");
+          lines.push("");
+
+          const avgGoodSteps = mean(goodActivity.map((a) => a.steps));
+          const avgPoorSteps = mean(poorActivity.map((a) => a.steps));
+          const avgGoodCal = mean(goodActivity.map((a) => a.active_calories));
+          const avgPoorCal = mean(poorActivity.map((a) => a.active_calories));
+
+          lines.push("| Metric | Good Nights | Poor Nights |");
+          lines.push("|--------|-------------|-------------|");
+          lines.push(`| Steps | ${Math.round(avgGoodSteps).toLocaleString()} | ${Math.round(avgPoorSteps).toLocaleString()} |`);
+          lines.push(`| Active Calories | ${Math.round(avgGoodCal)} | ${Math.round(avgPoorCal)} |`);
+          lines.push("");
+
+          const stepsDiff = ((avgGoodSteps - avgPoorSteps) / avgPoorSteps) * 100;
+          if (Math.abs(stepsDiff) > 10) {
+            if (stepsDiff > 0) {
+              lines.push(`→ Good sleep nights have ${stepsDiff.toFixed(0)}% more steps on average.`);
+            } else {
+              lines.push(`→ Good sleep nights have ${Math.abs(stepsDiff).toFixed(0)}% fewer steps on average.`);
+            }
+          }
+          lines.push("");
+        }
+
+        // Tag analysis
+        const allTags = new Map<string, { good: number; poor: number; total: number }>();
+        goodNights.forEach((n) => {
+          n.tags.forEach((tag) => {
+            const existing = allTags.get(tag) || { good: 0, poor: 0, total: 0 };
+            existing.good++;
+            existing.total++;
+            allTags.set(tag, existing);
+          });
+        });
+        poorNights.forEach((n) => {
+          n.tags.forEach((tag) => {
+            const existing = allTags.get(tag) || { good: 0, poor: 0, total: 0 };
+            existing.poor++;
+            existing.total++;
+            allTags.set(tag, existing);
+          });
+        });
+
+        const significantTags = [...allTags.entries()]
+          .filter(([, data]) => data.total >= 3)
+          .map(([tag, data]) => ({
+            tag,
+            ...data,
+            goodRate: data.good / (data.good + data.poor),
+          }))
+          .sort((a, b) => b.goodRate - a.goodRate);
+
+        if (significantTags.length > 0) {
+          lines.push("### Tag Impact");
+          lines.push("");
+          lines.push("| Tag | Good Nights | Poor Nights | Good Rate |");
+          lines.push("|-----|-------------|-------------|-----------|");
+
+          significantTags.forEach((t) => {
+            lines.push(`| ${t.tag} | ${t.good} | ${t.poor} | ${(t.goodRate * 100).toFixed(0)}% |`);
+          });
+          lines.push("");
+
+          // Find best and worst tags
+          if (significantTags.length >= 2) {
+            const bestTag = significantTags[0];
+            const worstTag = significantTags[significantTags.length - 1];
+
+            if (bestTag.goodRate > 0.6) {
+              lines.push(`✓ "${bestTag.tag}" is associated with good sleep (${(bestTag.goodRate * 100).toFixed(0)}% good nights)`);
+            }
+            if (worstTag.goodRate < 0.4) {
+              lines.push(`⚠ "${worstTag.tag}" is associated with poor sleep (${((1 - worstTag.goodRate) * 100).toFixed(0)}% poor nights)`);
+            }
+          }
+          lines.push("");
+        }
+
+        // Day of week patterns
+        const dowGood = new Map<number, number>();
+        const dowPoor = new Map<number, number>();
+        const dowNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+        goodNights.forEach((n) => {
+          const dow = new Date(n.day).getDay();
+          dowGood.set(dow, (dowGood.get(dow) || 0) + 1);
+        });
+        poorNights.forEach((n) => {
+          const dow = new Date(n.day).getDay();
+          dowPoor.set(dow, (dowPoor.get(dow) || 0) + 1);
+        });
+
+        lines.push("### Day of Week");
+        lines.push("");
+
+        let bestDay = -1;
+        let bestDayRate = 0;
+        let worstDay = -1;
+        let worstDayRate = 1;
+
+        for (let dow = 0; dow < 7; dow++) {
+          const good = dowGood.get(dow) || 0;
+          const poor = dowPoor.get(dow) || 0;
+          if (good + poor >= 2) {
+            const rate = good / (good + poor);
+            if (rate > bestDayRate) {
+              bestDayRate = rate;
+              bestDay = dow;
+            }
+            if (rate < worstDayRate) {
+              worstDayRate = rate;
+              worstDay = dow;
+            }
+          }
+        }
+
+        if (bestDay >= 0 && worstDay >= 0 && bestDay !== worstDay) {
+          lines.push(`- Best sleep: **${dowNames[bestDay]}** nights (${(bestDayRate * 100).toFixed(0)}% good)`);
+          lines.push(`- Worst sleep: **${dowNames[worstDay]}** nights (${((1 - worstDayRate) * 100).toFixed(0)}% poor)`);
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // analyze_hrv_trend tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "analyze_hrv_trend",
+    {
+      description:
+        "Analyze your HRV (Heart Rate Variability) trend over time. HRV is a key indicator of recovery and stress. Shows trend direction, rolling averages, and identifies recovery patterns.",
+      inputSchema: {
+        days: z.number().optional().describe("Number of days to analyze (default: 30)"),
+      },
+    },
+    async ({ days = 30 }) => {
+      try {
+        const endDate = getToday();
+        const startDate = getDaysAgo(days);
+
+        const sleepResult = await client.getSleep(startDate, endDate);
+        const sessions = sleepResult.data.filter((s) => s.type === "long_sleep" && s.average_hrv != null);
+
+        if (sessions.length < 5) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Need at least 5 nights of HRV data for analysis. Found ${sessions.length} nights with HRV in the past ${days} days.`,
+              },
+            ],
+          };
+        }
+
+        const hrvValues = sessions.map((s) => s.average_hrv!);
+        const hrvData = sessions.map((s) => ({ date: s.day, value: s.average_hrv! }));
+
+        const lines = [
+          `## HRV Trend Analysis (${days} days)`,
+          "",
+        ];
+
+        // Overall stats
+        const stats = dispersion(hrvValues);
+        lines.push("### Overview");
+        lines.push(`- **Current HRV:** ${Math.round(hrvValues[hrvValues.length - 1])} ms`);
+        lines.push(`- **Average:** ${Math.round(stats.mean)} ms`);
+        lines.push(`- **Range:** ${Math.round(stats.min)} - ${Math.round(stats.max)} ms`);
+        lines.push(`- **Variability (CV):** ${stats.coefficientOfVariation.toFixed(0)}%`);
+        lines.push("");
+
+        // Trend analysis
+        const hrvTrend = trend(hrvValues);
+        lines.push("### Trend");
+
+        if (hrvTrend.direction === "improving") {
+          lines.push(`↑ HRV is **increasing** over this period`);
+          if (hrvTrend.significant) {
+            lines.push(`  *(Statistically significant, p=${hrvTrend.pValue.toFixed(3)})*`);
+          }
+          lines.push("");
+          lines.push("This suggests improving recovery and stress resilience.");
+        } else if (hrvTrend.direction === "declining") {
+          lines.push(`↓ HRV is **decreasing** over this period`);
+          if (hrvTrend.significant) {
+            lines.push(`  *(Statistically significant, p=${hrvTrend.pValue.toFixed(3)})*`);
+          }
+          lines.push("");
+          lines.push("This may indicate accumulated stress, overtraining, or illness.");
+        } else {
+          lines.push(`→ HRV is **stable** over this period`);
+          lines.push("");
+          lines.push("Your recovery capacity is consistent.");
+        }
+        lines.push("");
+
+        // Rolling averages
+        if (hrvValues.length >= 7) {
+          const rolling = rollingAverages(hrvValues);
+          lines.push("### Rolling Averages");
+          lines.push(`- Last 7 days: ${Math.round(rolling.day7.value)} ms`);
+          if (hrvValues.length >= 14) {
+            lines.push(`- Last 14 days: ${Math.round(rolling.day14.value)} ms`);
+          }
+          if (hrvValues.length >= 30) {
+            lines.push(`- Last 30 days: ${Math.round(rolling.day30.value)} ms`);
+          }
+          lines.push("");
+
+          // Short vs long term comparison
+          if (hrvValues.length >= 14) {
+            const shortTerm = rolling.day7.value;
+            const longTerm = hrvValues.length >= 30 ? rolling.day30.value : rolling.day14.value;
+            const diff = ((shortTerm - longTerm) / longTerm) * 100;
+
+            if (diff > 5) {
+              lines.push(`✓ Recent HRV is ${diff.toFixed(0)}% above baseline - good recovery.`);
+            } else if (diff < -5) {
+              lines.push(`⚠ Recent HRV is ${Math.abs(diff).toFixed(0)}% below baseline - may need more recovery.`);
+            } else {
+              lines.push(`→ Recent HRV is close to baseline.`);
+            }
+            lines.push("");
+          }
+        }
+
+        // Day of week patterns
+        const dowAnalysis = dayOfWeekAnalysis(hrvData);
+        lines.push("### Weekly Pattern");
+        lines.push(`- **Best HRV:** ${dowAnalysis.bestDay.day} (avg ${Math.round(dowAnalysis.bestDay.average)} ms)`);
+        lines.push(`- **Lowest HRV:** ${dowAnalysis.worstDay.day} (avg ${Math.round(dowAnalysis.worstDay.average)} ms)`);
+        lines.push(`- **Weekday avg:** ${Math.round(dowAnalysis.weekdayAverage)} ms`);
+        lines.push(`- **Weekend avg:** ${Math.round(dowAnalysis.weekendAverage)} ms`);
+
+        // Outliers
+        const outliers = detectOutliers(hrvValues);
+        if (outliers.outliers.length > 0) {
+          lines.push("");
+          lines.push("### Unusual Nights");
+          outliers.outliers.forEach((o) => {
+            const session = sessions[o.index];
+            const direction = o.value < stats.mean ? "low" : "high";
+            lines.push(`- ${session.day}: ${Math.round(o.value)} ms (unusually ${direction})`);
+          });
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
