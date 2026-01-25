@@ -1,6 +1,6 @@
 {
   "name": "oura-ring-mcp",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "mcpName": "io.github.mitchhankins01/oura-ring-mcp",
   "description": "MCP server for Oura Ring data with smart analysis tools",
   "type": "module",
