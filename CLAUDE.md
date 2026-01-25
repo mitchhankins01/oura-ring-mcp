@@ -388,9 +388,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 **Important Notes**:
 - Replace `/absolute/path/to/oura-mcp` with your actual installation path
-- This project requires **Node >=24**. If Claude Desktop is using an older Node version (check logs), specify the full path to a modern Node:
+- This project requires **Node >=18**. If Claude Desktop is using an older Node version (check logs), specify the full path to a modern Node:
   ```json
-  "command": "/Users/yourusername/.nvm/versions/node/v24.7.0/bin/node"
+  "command": "/Users/yourusername/.nvm/versions/node/v18.20.0/bin/node"
   ```
 
 Then restart Claude Desktop.

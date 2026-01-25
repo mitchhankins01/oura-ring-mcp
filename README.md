@@ -55,7 +55,7 @@ npx oura-ring-mcp
 
 ### 3. Configure Claude Desktop
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%/Claude/claude_desktop_config.json` (Windows):
+Add to `claude_desktop_config.json`:
 
 **With Personal Access Token:**
 ```json
@@ -72,7 +72,20 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-**With OAuth:**
+**With OAuth (after running `npx oura-ring-mcp auth`):**
+```json
+{
+  "mcpServers": {
+    "oura": {
+      "command": "npx",
+      "args": ["oura-ring-mcp"]
+    }
+  }
+}
+```
+
+The server reads credentials from `~/.oura-mcp/credentials.json`. To enable automatic token refresh, add your OAuth credentials:
+
 ```json
 {
   "mcpServers": {
@@ -88,7 +101,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-Restart Claude Desktop. Requires Node >=24.
+Restart Claude Desktop. Requires Node >=18.
 
 ## What Can I Ask?
 
