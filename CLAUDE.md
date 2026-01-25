@@ -16,7 +16,8 @@ src/
 ├── client.ts          # Oura API client (thin wrapper)
 ├── tools/
 │   └── index.ts       # Tool definitions and handlers
-├── resources/         # (Phase 2) MCP resources like oura://today
+├── resources/
+│   └── index.ts       # MCP resources (oura://today, oura://weekly-summary)
 ├── prompts/           # (Phase 3) Prompt templates
 ├── auth/              # (Phase 4a) OAuth CLI flow
 │   ├── cli.ts         # `npx oura-mcp auth` command
@@ -86,7 +87,7 @@ scripts/
   - [x] `get_cardiovascular_age` - Estimated vascular age
   - [x] `get_tags` - User-created tags and notes
   - [x] `get_sessions` - Meditation/breathing sessions
-- [ ] Add MCP resources (`oura://today`, `oura://weekly-summary`)
+- [x] Add MCP resources (`oura://today`, `oura://weekly-summary`)
 - [ ] Better error messages
 - [x] Set up Vitest with coverage thresholds (75/80/80/80)
 - [x] Create test infrastructure (fixtures, helpers directories)

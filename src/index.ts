@@ -11,6 +11,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
 import { OuraClient } from "./client.js";
 import { registerTools } from "./tools/index.js";
+import { registerResources } from "./resources/index.js";
 
 // ─────────────────────────────────────────────────────────────
 // Configuration
@@ -37,8 +38,9 @@ const server = new McpServer({
 
 const ouraClient = new OuraClient({ accessToken: ACCESS_TOKEN });
 
-// Register all tools with the server
+// Register all tools and resources with the server
 registerTools(server, ouraClient);
+registerResources(server, ouraClient);
 
 // ─────────────────────────────────────────────────────────────
 // Start Server
