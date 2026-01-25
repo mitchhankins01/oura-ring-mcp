@@ -161,12 +161,16 @@ export function registerTools(server: McpServer, client: OuraClient) {
             `- Resting Heart Rate: ${c.resting_heart_rate ?? "N/A"}`,
             `- Recovery Index: ${c.recovery_index ?? "N/A"}`,
             `- Sleep Balance: ${c.sleep_balance ?? "N/A"}`,
+            `- Sleep Regularity: ${(c as Record<string, unknown>).sleep_regularity ?? "N/A"}`,
             `- Previous Night: ${c.previous_night ?? "N/A"}`,
             `- Previous Day Activity: ${c.previous_day_activity ?? "N/A"}`,
             `- Activity Balance: ${c.activity_balance ?? "N/A"}`,
             `- Body Temperature: ${c.body_temperature ?? "N/A"}`,
             day.temperature_deviation !== null
               ? `\n**Temperature Deviation:** ${day.temperature_deviation}°C`
+              : "",
+            day.temperature_trend_deviation !== null
+              ? `**Temperature Trend:** ${day.temperature_trend_deviation}°C`
               : "",
           ].join("\n");
         });
@@ -891,6 +895,11 @@ function formatSleepSession(session: SleepSession, dailyScore?: DailySleep): str
     `- Light: ${formatDuration(lightSleep)} (${percentage(lightSleep, totalSleep)}%)`,
     `- Awake: ${formatDuration(awakeTime)}`,
   );
+
+  // Add restless periods if available
+  if (session.restless_periods != null) {
+    lines.push(`- Restless Periods: ${session.restless_periods}`);
+  }
 
   // Add biometrics if available
   if (session.average_heart_rate || session.average_hrv) {
