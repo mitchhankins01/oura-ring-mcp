@@ -18,7 +18,8 @@ src/
 │   └── index.ts       # Tool definitions and handlers
 ├── resources/
 │   └── index.ts       # MCP resources (oura://today, oura://weekly-summary)
-├── prompts/           # (Phase 3) Prompt templates
+├── prompts/
+│   └── index.ts       # MCP prompt templates for common analysis tasks
 ├── auth/              # (Phase 4a) OAuth CLI flow
 │   ├── cli.ts         # `npx oura-mcp auth` command
 │   ├── oauth.ts       # OAuth2 flow helpers
@@ -94,8 +95,21 @@ scripts/
   - Shows all tags with usage count and last used date
   - Helps Claude know what tags are available before using `compare_conditions` tool
 
+## MCP Prompts (7 available)
+
+Pre-defined templates that guide Claude through common health analysis tasks:
+
+- **`weekly-review`** - Comprehensive review of sleep, readiness, and activity from the past week
+- **`sleep-optimization`** - Analyze 30 days of sleep to identify what leads to best sleep
+- **`recovery-check`** - Check if you're recovered enough to train hard or should rest
+- **`compare-weeks`** - Compare this week vs last week across all metrics
+- **`tag-analysis`** - Analyze how a specific tag/condition affects your health (takes `tag` argument)
+- **`monthly-trends`** - 30-day trend analysis with correlations and anomaly detection
+- **`quick-status`** - Brief daily status check for quick decisions
+
 ## Notes
 
+- When using cURL, load the token in .env
 - Oura PAT tokens deprecated end of 2025 → Phase 4a adds OAuth CLI flow
 - Data syncs when user opens Oura app - "no data" often means ring hasn't synced
 - Sleep data is attributed to the day you woke up, not when you fell asleep
@@ -106,7 +120,7 @@ scripts/
 
 See [README.md](README.md#roadmap) for the full roadmap with detailed checklists.
 
-**Current status:** Phase 2 complete, Phase 3 (Make it Smart) in progress.
+**Current status:** Phase 3 (Make it Smart) nearly complete. Smart tools, derived metrics, and prompts done. HRV-specific features and visualization data remain.
 
 ## Key Files
 
@@ -120,7 +134,7 @@ See [README.md](README.md#roadmap) for the full roadmap with detailed checklists
 
 ## Analysis Utilities (`src/utils/analysis.ts`)
 
-Phase 3 foundation for smart tools. All functions are pure, well-tested (49 tests), and inspired by the Wearipedia notebook.
+Phase 3 foundation for smart tools. All functions are pure, well-tested (66 tests), and inspired by the Wearipedia notebook.
 
 **Basic Statistics:**
 - `mean`, `standardDeviation`, `sampleStandardDeviation`, `quantile`, `min`, `max`
@@ -153,6 +167,11 @@ Phase 3 foundation for smart tools. All functions are pure, well-tested (49 test
 **Sleep-Specific:**
 - `sleepDebt(durations, targetHours?)` → debt hours and status
 - `sleepRegularity(bedtimes, waketimes)` → regularity score (0-100)
+
+**Derived Metrics (NEW):**
+- `sleepStageRatios(deep, rem, light)` → ratios and percentages with status ("low"/"normal"/"good"/"excellent")
+- `computeSleepScore(efficiency, deepPct, remPct)` → weighted sleep score (0-100) with interpretation
+- `hrvRecoveryPattern(samples)` → first/second half comparison, pattern ("good_recovery"/"flat"/"declining")
 
 ## Reference Materials
 

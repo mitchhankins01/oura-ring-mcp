@@ -124,6 +124,20 @@ Once connected, try asking Claude:
 | `oura://monthly-insights` | Comprehensive 30-day analysis with trends, patterns, anomalies |
 | `oura://tag-summary` | Your tags and usage frequency (helpful before using `compare_conditions`) |
 
+## MCP Prompts
+
+Pre-defined templates that guide Claude through common health analysis tasks:
+
+| Prompt | Description |
+|--------|-------------|
+| `weekly-review` | Comprehensive review of sleep, readiness, and activity from the past week |
+| `sleep-optimization` | Analyze 30 days of sleep to identify what leads to your best sleep |
+| `recovery-check` | Check if you're recovered enough to train hard or should rest today |
+| `compare-weeks` | Compare this week vs last week across all health metrics |
+| `tag-analysis` | Analyze how a specific tag/condition affects your health (takes `tag` argument) |
+| `monthly-trends` | 30-day trend analysis with correlations and anomaly detection |
+| `quick-status` | Brief daily status check for quick decisions |
+
 ## Development
 
 ### Commands
@@ -202,10 +216,10 @@ See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and
 - [x] Correlation with p-value
 - [x] Gaussian smoothing for visualization
 
-**Derived metrics still TODO:**
-- [ ] Sleep stage ratios (deep/REM/light as % of total sleep)
-- [ ] Sleep score formula (efficiency + deep% + REM%)
-- [ ] HRV recovery pattern (first half vs second half of night)
+**Derived metrics:**
+- [x] Sleep stage ratios (deep/REM/light as % of total sleep)
+- [x] Sleep score formula (efficiency + deep% + REM%)
+- [x] HRV recovery pattern (first half vs second half of night)
 
 **HRV-specific features:**
 - [ ] Time domain: SDNN, RMSSD, pNN50, CVSD
@@ -229,8 +243,14 @@ See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and
 - [ ] Multi-metric overlays with gaussian smoothing
 - [ ] Poincaré plot data (SD1/SD2 ellipse)
 
-**MCP features:**
-- [ ] Prompts for common analysis tasks
+**MCP prompts (7 available):**
+- [x] `weekly-review` - Comprehensive weekly health review
+- [x] `sleep-optimization` - 30-day sleep pattern analysis
+- [x] `recovery-check` - Today's recovery status and training guidance
+- [x] `compare-weeks` - This week vs last week comparison
+- [x] `tag-analysis` - Analyze impact of a specific tag/condition
+- [x] `monthly-trends` - 30-day trend analysis with correlations
+- [x] `quick-status` - Brief daily status check
 
 ### Phase 4a: Ship It (Local)
 - [ ] CLI auth flow: `npx oura-mcp auth` (for when PAT deprecated end of 2025)

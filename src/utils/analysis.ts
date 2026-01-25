@@ -842,3 +842,224 @@ export function sleepRegularity(bedtimes: string[], waketimes: string[]): SleepR
     status,
   };
 }
+
+// ============================================================================
+// Sleep Stage Analysis (Derived Metrics)
+// ============================================================================
+
+export interface SleepStageRatios {
+  deepRatio: number; // 0-1, percentage as decimal
+  remRatio: number;
+  lightRatio: number;
+  deepPercent: number; // 0-100
+  remPercent: number;
+  lightPercent: number;
+  deepStatus: "low" | "normal" | "good" | "excellent";
+  remStatus: "low" | "normal" | "good" | "excellent";
+  totalSleepSeconds: number;
+}
+
+/**
+ * Calculate sleep stage ratios from duration data
+ * Ratios are based on total sleep duration (not time in bed), matching Oura app behavior.
+ *
+ * Target ranges (per Oura and sleep science):
+ * - Deep sleep: 15-20% (excellent: >20%)
+ * - REM sleep: 20-25% (excellent: >25%)
+ * - Light sleep: remainder (~55-65%)
+ *
+ * @param deepSeconds - Deep sleep duration in seconds
+ * @param remSeconds - REM sleep duration in seconds
+ * @param lightSeconds - Light sleep duration in seconds
+ */
+export function sleepStageRatios(
+  deepSeconds: number,
+  remSeconds: number,
+  lightSeconds: number
+): SleepStageRatios {
+  const totalSleepSeconds = deepSeconds + remSeconds + lightSeconds;
+
+  if (totalSleepSeconds === 0) {
+    return {
+      deepRatio: 0,
+      remRatio: 0,
+      lightRatio: 0,
+      deepPercent: 0,
+      remPercent: 0,
+      lightPercent: 0,
+      deepStatus: "low",
+      remStatus: "low",
+      totalSleepSeconds: 0,
+    };
+  }
+
+  const deepRatio = deepSeconds / totalSleepSeconds;
+  const remRatio = remSeconds / totalSleepSeconds;
+  const lightRatio = lightSeconds / totalSleepSeconds;
+
+  const deepPercent = deepRatio * 100;
+  const remPercent = remRatio * 100;
+  const lightPercent = lightRatio * 100;
+
+  // Deep sleep status (target: 15-20%, excellent: >20%)
+  let deepStatus: "low" | "normal" | "good" | "excellent";
+  if (deepPercent < 10) deepStatus = "low";
+  else if (deepPercent < 15) deepStatus = "normal";
+  else if (deepPercent < 20) deepStatus = "good";
+  else deepStatus = "excellent";
+
+  // REM status (target: 20-25%, excellent: >25%)
+  let remStatus: "low" | "normal" | "good" | "excellent";
+  if (remPercent < 15) remStatus = "low";
+  else if (remPercent < 20) remStatus = "normal";
+  else if (remPercent < 25) remStatus = "good";
+  else remStatus = "excellent";
+
+  return {
+    deepRatio,
+    remRatio,
+    lightRatio,
+    deepPercent,
+    remPercent,
+    lightPercent,
+    deepStatus,
+    remStatus,
+    totalSleepSeconds,
+  };
+}
+
+export interface ComputedSleepScore {
+  score: number; // 0-100
+  components: {
+    efficiencyScore: number; // contribution from efficiency
+    deepScore: number; // contribution from deep sleep %
+    remScore: number; // contribution from REM %
+  };
+  interpretation: "poor" | "fair" | "good" | "excellent";
+}
+
+/**
+ * Compute a sleep quality score from key metrics
+ * Formula inspired by sleep research: weighted combination of efficiency, deep%, and REM%
+ *
+ * Weights:
+ * - Efficiency: 50% (most important - actually sleeping while in bed)
+ * - Deep sleep %: 30% (restorative sleep)
+ * - REM sleep %: 20% (cognitive recovery, memory consolidation)
+ *
+ * @param efficiency - Sleep efficiency as percentage (0-100)
+ * @param deepPercent - Deep sleep as percentage of total sleep (0-100)
+ * @param remPercent - REM sleep as percentage of total sleep (0-100)
+ */
+export function computeSleepScore(
+  efficiency: number,
+  deepPercent: number,
+  remPercent: number
+): ComputedSleepScore {
+  // Normalize inputs to 0-100 scale with reasonable targets
+  // Efficiency: direct use (already 0-100, target is 85-95%)
+  const efficiencyScore = Math.min(100, efficiency);
+
+  // Deep sleep: target is 15-20%, scale so 20% = 100 points
+  // 0% = 0, 10% = 50, 20%+ = 100
+  const deepScore = Math.min(100, (deepPercent / 20) * 100);
+
+  // REM sleep: target is 20-25%, scale so 25% = 100 points
+  // 0% = 0, 12.5% = 50, 25%+ = 100
+  const remScore = Math.min(100, (remPercent / 25) * 100);
+
+  // Weighted combination
+  const score = 0.5 * efficiencyScore + 0.3 * deepScore + 0.2 * remScore;
+
+  // Interpretation
+  let interpretation: "poor" | "fair" | "good" | "excellent";
+  if (score < 50) interpretation = "poor";
+  else if (score < 70) interpretation = "fair";
+  else if (score < 85) interpretation = "good";
+  else interpretation = "excellent";
+
+  return {
+    score: Math.round(score),
+    components: {
+      efficiencyScore: Math.round(efficiencyScore),
+      deepScore: Math.round(deepScore),
+      remScore: Math.round(remScore),
+    },
+    interpretation,
+  };
+}
+
+// ============================================================================
+// HRV Recovery Pattern Analysis
+// ============================================================================
+
+export interface HrvRecoveryPattern {
+  firstHalfAvg: number; // Average HRV in first half of sleep (ms)
+  secondHalfAvg: number; // Average HRV in second half of sleep (ms)
+  difference: number; // firstHalf - secondHalf
+  differencePercent: number; // Percentage difference
+  pattern: "good_recovery" | "flat" | "declining" | "insufficient_data";
+  interpretation: string;
+}
+
+/**
+ * Analyze HRV recovery pattern during sleep
+ *
+ * A healthy recovery pattern shows higher HRV in the first half of the night
+ * (parasympathetic dominance during deep sleep) compared to the second half.
+ * This indicates the body is recovering well.
+ *
+ * Patterns:
+ * - "good_recovery": First half HRV > second half by 5%+ (healthy)
+ * - "flat": HRV roughly equal throughout (neutral)
+ * - "declining": Second half HRV > first half (may indicate stress, alcohol, late meals)
+ *
+ * @param hrvSamples - Array of HRV values during sleep (in chronological order)
+ */
+export function hrvRecoveryPattern(hrvSamples: number[]): HrvRecoveryPattern {
+  // Filter out invalid values
+  const validSamples = hrvSamples.filter((v) => v > 0 && isFinite(v));
+
+  if (validSamples.length < 4) {
+    return {
+      firstHalfAvg: 0,
+      secondHalfAvg: 0,
+      difference: 0,
+      differencePercent: 0,
+      pattern: "insufficient_data",
+      interpretation: "Not enough HRV samples to analyze recovery pattern (need at least 4).",
+    };
+  }
+
+  const midpoint = Math.floor(validSamples.length / 2);
+  const firstHalf = validSamples.slice(0, midpoint);
+  const secondHalf = validSamples.slice(midpoint);
+
+  const firstHalfAvg = mean(firstHalf);
+  const secondHalfAvg = mean(secondHalf);
+  const difference = firstHalfAvg - secondHalfAvg;
+  const differencePercent = secondHalfAvg !== 0 ? (difference / secondHalfAvg) * 100 : 0;
+
+  let pattern: "good_recovery" | "flat" | "declining";
+  let interpretation: string;
+
+  if (differencePercent > 5) {
+    pattern = "good_recovery";
+    interpretation = `Good recovery pattern: HRV was ${Math.abs(differencePercent).toFixed(0)}% higher in the first half of the night, indicating healthy parasympathetic activity during deep sleep.`;
+  } else if (differencePercent < -5) {
+    pattern = "declining";
+    interpretation = `Declining pattern: HRV was ${Math.abs(differencePercent).toFixed(0)}% lower in the first half of the night. This may indicate stress, alcohol consumption, late meals, or incomplete recovery.`;
+  } else {
+    pattern = "flat";
+    interpretation = `Flat pattern: HRV was relatively stable throughout the night. This is neutral - neither strong recovery nor concerning.`;
+  }
+
+  return {
+    firstHalfAvg: Math.round(firstHalfAvg * 10) / 10,
+    secondHalfAvg: Math.round(secondHalfAvg * 10) / 10,
+    difference: Math.round(difference * 10) / 10,
+    differencePercent: Math.round(differencePercent * 10) / 10,
+    pattern,
+    interpretation,
+  };
+}

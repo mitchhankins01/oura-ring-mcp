@@ -15,6 +15,7 @@ class MockMcpServer {
 
   connect = vi.fn().mockResolvedValue(undefined);
   registerResource = vi.fn();
+  registerPrompt = vi.fn();
 
   constructor(config: unknown) {
     MockMcpServer.lastConfig = config;
@@ -56,6 +57,7 @@ class MockOuraClient {
 
 const mockRegisterTools = vi.fn();
 const mockRegisterResources = vi.fn();
+const mockRegisterPrompts = vi.fn();
 
 // Mock the MCP SDK modules before importing index
 vi.mock("@modelcontextprotocol/sdk/server/mcp.js", () => ({
@@ -78,6 +80,10 @@ vi.mock("./resources/index.js", () => ({
   registerResources: mockRegisterResources,
 }));
 
+vi.mock("./prompts/index.js", () => ({
+  registerPrompts: mockRegisterPrompts,
+}));
+
 describe("MCP Server", () => {
   const originalEnv = process.env;
   const originalConsoleError = console.error;
@@ -92,6 +98,7 @@ describe("MCP Server", () => {
     MockOuraClient.reset();
     mockRegisterTools.mockClear();
     mockRegisterResources.mockClear();
+    mockRegisterPrompts.mockClear();
 
     // Reset environment - always set a token for these tests
     process.env = { ...originalEnv };

@@ -19,6 +19,9 @@ import {
   dayOfWeekAnalysis,
   sleepDebt,
   sleepRegularity,
+  sleepStageRatios,
+  computeSleepScore,
+  hrvRecoveryPattern,
 } from "./analysis.js";
 
 describe("Basic Statistics", () => {
@@ -469,5 +472,193 @@ describe("Edge Cases", () => {
     const data = [1e10, 2e10, 3e10];
     expect(mean(data)).toBe(2e10);
     expect(trend(data).direction).toBe("improving");
+  });
+});
+
+describe("Sleep Stage Ratios", () => {
+  describe("sleepStageRatios", () => {
+    it("calculates ratios correctly", () => {
+      // 7 hours total: 1.5h deep, 1.5h REM, 4h light
+      const deepSeconds = 1.5 * 3600; // 5400
+      const remSeconds = 1.5 * 3600; // 5400
+      const lightSeconds = 4 * 3600; // 14400
+      const result = sleepStageRatios(deepSeconds, remSeconds, lightSeconds);
+
+      expect(result.totalSleepSeconds).toBe(25200); // 7 hours
+      expect(result.deepPercent).toBeCloseTo(21.4, 1); // 1.5/7 = 21.4%
+      expect(result.remPercent).toBeCloseTo(21.4, 1);
+      expect(result.lightPercent).toBeCloseTo(57.1, 1);
+      expect(result.deepRatio).toBeCloseTo(0.214, 2);
+      expect(result.remRatio).toBeCloseTo(0.214, 2);
+    });
+
+    it("classifies deep sleep status correctly", () => {
+      // Low deep sleep (5%)
+      expect(sleepStageRatios(180, 900, 2520).deepStatus).toBe("low"); // 5%
+
+      // Normal deep sleep (12%)
+      expect(sleepStageRatios(432, 900, 2268).deepStatus).toBe("normal"); // 12%
+
+      // Good deep sleep (17%)
+      expect(sleepStageRatios(612, 900, 2088).deepStatus).toBe("good"); // 17%
+
+      // Excellent deep sleep (25%)
+      expect(sleepStageRatios(900, 900, 1800).deepStatus).toBe("excellent"); // 25%
+    });
+
+    it("classifies REM status correctly", () => {
+      // Low REM (10%)
+      expect(sleepStageRatios(720, 360, 2520).remStatus).toBe("low"); // 10%
+
+      // Normal REM (17%)
+      expect(sleepStageRatios(720, 612, 2268).remStatus).toBe("normal"); // 17%
+
+      // Good REM (22%)
+      expect(sleepStageRatios(720, 792, 2088).remStatus).toBe("good"); // 22%
+
+      // Excellent REM (28%)
+      expect(sleepStageRatios(720, 1008, 1872).remStatus).toBe("excellent"); // 28%
+    });
+
+    it("handles zero total sleep", () => {
+      const result = sleepStageRatios(0, 0, 0);
+
+      expect(result.deepPercent).toBe(0);
+      expect(result.remPercent).toBe(0);
+      expect(result.lightPercent).toBe(0);
+      expect(result.deepStatus).toBe("low");
+      expect(result.remStatus).toBe("low");
+    });
+  });
+});
+
+describe("Computed Sleep Score", () => {
+  describe("computeSleepScore", () => {
+    it("calculates score for excellent sleep", () => {
+      // 95% efficiency, 20% deep, 25% REM (optimal)
+      const result = computeSleepScore(95, 20, 25);
+
+      expect(result.score).toBeGreaterThanOrEqual(85);
+      expect(result.interpretation).toBe("excellent");
+      expect(result.components.efficiencyScore).toBe(95);
+      expect(result.components.deepScore).toBe(100); // 20% hits max
+      expect(result.components.remScore).toBe(100); // 25% hits max
+    });
+
+    it("calculates score for poor sleep", () => {
+      // 60% efficiency, 5% deep, 10% REM
+      const result = computeSleepScore(60, 5, 10);
+
+      expect(result.score).toBeLessThan(50);
+      expect(result.interpretation).toBe("poor");
+    });
+
+    it("calculates score for fair sleep", () => {
+      // 75% efficiency, 10% deep, 15% REM
+      const result = computeSleepScore(75, 10, 15);
+
+      expect(result.score).toBeGreaterThanOrEqual(50);
+      expect(result.score).toBeLessThan(70);
+      expect(result.interpretation).toBe("fair");
+    });
+
+    it("calculates score for good sleep", () => {
+      // 85% efficiency, 15% deep, 20% REM
+      const result = computeSleepScore(85, 15, 20);
+
+      expect(result.score).toBeGreaterThanOrEqual(70);
+      expect(result.score).toBeLessThan(85);
+      expect(result.interpretation).toBe("good");
+    });
+
+    it("weights efficiency highest", () => {
+      // Same deep/REM, different efficiency
+      const highEfficiency = computeSleepScore(90, 15, 20);
+      const lowEfficiency = computeSleepScore(70, 15, 20);
+
+      expect(highEfficiency.score).toBeGreaterThan(lowEfficiency.score);
+      // Should differ by ~10 points (50% weight on 20% difference)
+      expect(highEfficiency.score - lowEfficiency.score).toBeCloseTo(10, 0);
+    });
+
+    it("caps component scores at 100", () => {
+      // Extremely high values should cap
+      const result = computeSleepScore(100, 40, 50);
+
+      expect(result.components.efficiencyScore).toBe(100);
+      expect(result.components.deepScore).toBe(100);
+      expect(result.components.remScore).toBe(100);
+    });
+  });
+});
+
+describe("HRV Recovery Pattern", () => {
+  describe("hrvRecoveryPattern", () => {
+    it("detects good recovery pattern", () => {
+      // Higher HRV in first half (good recovery)
+      const hrvSamples = [50, 55, 52, 48, 45, 40, 38, 35];
+      const result = hrvRecoveryPattern(hrvSamples);
+
+      expect(result.pattern).toBe("good_recovery");
+      expect(result.firstHalfAvg).toBeGreaterThan(result.secondHalfAvg);
+      expect(result.difference).toBeGreaterThan(0);
+      expect(result.interpretation).toContain("Good recovery");
+    });
+
+    it("detects declining pattern", () => {
+      // Lower HRV in first half (poor recovery)
+      const hrvSamples = [30, 32, 35, 38, 45, 50, 52, 55];
+      const result = hrvRecoveryPattern(hrvSamples);
+
+      expect(result.pattern).toBe("declining");
+      expect(result.firstHalfAvg).toBeLessThan(result.secondHalfAvg);
+      expect(result.difference).toBeLessThan(0);
+      expect(result.interpretation).toContain("Declining");
+    });
+
+    it("detects flat pattern", () => {
+      // Stable HRV throughout
+      const hrvSamples = [45, 44, 46, 45, 44, 46, 45, 44];
+      const result = hrvRecoveryPattern(hrvSamples);
+
+      expect(result.pattern).toBe("flat");
+      expect(Math.abs(result.differencePercent)).toBeLessThanOrEqual(5);
+      expect(result.interpretation).toContain("Flat");
+    });
+
+    it("handles insufficient data", () => {
+      const result = hrvRecoveryPattern([40, 42]);
+
+      expect(result.pattern).toBe("insufficient_data");
+      expect(result.interpretation).toContain("Not enough");
+    });
+
+    it("filters out invalid values", () => {
+      // Mix of valid and invalid (0, negative, Infinity)
+      const hrvSamples = [50, 0, 55, -10, 52, Infinity, 48, 45, 40, 38];
+      const result = hrvRecoveryPattern(hrvSamples);
+
+      // Should still work with remaining valid values
+      expect(result.pattern).not.toBe("insufficient_data");
+      expect(result.firstHalfAvg).toBeGreaterThan(0);
+    });
+
+    it("handles empty array", () => {
+      const result = hrvRecoveryPattern([]);
+
+      expect(result.pattern).toBe("insufficient_data");
+    });
+
+    it("calculates difference percentage correctly", () => {
+      // First half avg: 50, Second half avg: 40
+      // Difference: 10, Percentage: 10/40 = 25%
+      const hrvSamples = [50, 50, 50, 50, 40, 40, 40, 40];
+      const result = hrvRecoveryPattern(hrvSamples);
+
+      expect(result.firstHalfAvg).toBe(50);
+      expect(result.secondHalfAvg).toBe(40);
+      expect(result.difference).toBe(10);
+      expect(result.differencePercent).toBe(25);
+    });
   });
 });
