@@ -44,6 +44,7 @@ import {
   sleepDebt,
   sleepRegularity,
   correlate,
+  hrvRecoveryPattern,
 } from "../utils/index.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -2197,6 +2198,21 @@ export function registerTools(server: McpServer, client: OuraClient) {
             const direction = o.value < stats.mean ? "low" : "high";
             lines.push(`- ${session.day}: ${Math.round(o.value)} ms (unusually ${direction})`);
           });
+        }
+
+        // Most recent night's HRV recovery pattern
+        const mostRecent = sessions[sessions.length - 1];
+        const hrvSamples = mostRecent.hrv?.items?.filter((v): v is number => v !== null) ?? [];
+        if (hrvSamples.length >= 4) {
+          const recovery = hrvRecoveryPattern(hrvSamples);
+          if (recovery.pattern !== "insufficient_data") {
+            lines.push("");
+            lines.push("### Last Night's Recovery Pattern");
+            lines.push(`- **Pattern:** ${recovery.pattern.replace(/_/g, " ")}`);
+            lines.push(`- First half avg: ${recovery.firstHalfAvg} ms`);
+            lines.push(`- Second half avg: ${recovery.secondHalfAvg} ms`);
+            lines.push(`- ${recovery.interpretation}`);
+          }
         }
 
         return {

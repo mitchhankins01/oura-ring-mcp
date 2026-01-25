@@ -221,11 +221,11 @@ See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and
 - [x] Sleep score formula (efficiency + deep% + REM%)
 - [x] HRV recovery pattern (first half vs second half of night)
 
-**HRV-specific features:**
-- [ ] Time domain: SDNN, RMSSD, pNN50, CVSD
-- [ ] Frequency domain: LF, HF, LF/HF ratio (sympathovagal balance)
-- [ ] Non-linear: Poincaré SD1/SD2 (short vs long-term variability)
-- [ ] Preprocessing: ectopic beat removal (malik method)
+**HRV-specific features:** ⚠️ *Out of scope - Oura API only provides 5-minute aggregated HRV, not raw R-R intervals required for these metrics*
+- [x] ~~Time domain: SDNN, RMSSD, pNN50, CVSD~~ (requires R-R intervals)
+- [x] ~~Frequency domain: LF, HF, LF/HF ratio~~ (requires R-R intervals)
+- [x] ~~Non-linear: Poincaré SD1/SD2~~ (requires R-R intervals)
+- [x] ~~Preprocessing: ectopic beat removal~~ (requires R-R intervals)
 
 **Smart tools:**
 - [x] `detect_anomalies` - Flag unusual readings using IQR + Z-score
@@ -239,9 +239,9 @@ See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and
 **Visualization-ready data (for Claude artifacts):**
 - [ ] Sleep stages stackplot data (Oura app style)
 - [ ] Heart rate during sleep with smoothing
+- [ ] HRV during sleep with smoothing
 - [ ] Body temperature trend bars
-- [ ] Multi-metric overlays with gaussian smoothing
-- [ ] Poincaré plot data (SD1/SD2 ellipse)
+- [x] ~~Poincaré plot data (SD1/SD2 ellipse)~~ (requires R-R intervals)
 
 **MCP prompts (7 available):**
 - [x] `weekly-review` - Comprehensive weekly health review

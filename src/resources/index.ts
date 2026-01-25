@@ -22,6 +22,8 @@ import {
   dayOfWeekAnalysis,
   sleepDebt,
   sleepRegularity,
+  sleepStageRatios,
+  hrvRecoveryPattern,
 } from "../utils/analysis.js";
 
 /**
@@ -85,10 +87,13 @@ export function registerResources(server: McpServer, client: OuraClient): void {
           sections.push(`- Efficiency: ${percentage(totalSleep, timeInBed)}%`);
           sections.push(`- Bedtime: ${formatTime(mainSession.bedtime_start)} → ${formatTime(mainSession.bedtime_end)}`);
           sections.push("");
+
+          // Sleep stages with status from sleepStageRatios
+          const stageRatios = sleepStageRatios(deepSleep, remSleep, lightSleep);
           sections.push("**Sleep Stages:**");
-          sections.push(`- Deep: ${formatDuration(deepSleep)} (${percentage(deepSleep, totalSleep)}%)`);
-          sections.push(`- REM: ${formatDuration(remSleep)} (${percentage(remSleep, totalSleep)}%)`);
-          sections.push(`- Light: ${formatDuration(lightSleep)} (${percentage(lightSleep, totalSleep)}%)`);
+          sections.push(`- Deep: ${formatDuration(deepSleep)} (${stageRatios.deepPercent.toFixed(0)}%) - ${stageRatios.deepStatus}`);
+          sections.push(`- REM: ${formatDuration(remSleep)} (${stageRatios.remPercent.toFixed(0)}%) - ${stageRatios.remStatus}`);
+          sections.push(`- Light: ${formatDuration(lightSleep)} (${stageRatios.lightPercent.toFixed(0)}%)`);
 
           // Biometrics
           if (mainSession.average_heart_rate || mainSession.average_hrv) {
@@ -102,6 +107,15 @@ export function registerResources(server: McpServer, client: OuraClient): void {
             }
             if (mainSession.average_breath) {
               sections.push(`- Breathing Rate: ${mainSession.average_breath} breaths/min`);
+            }
+
+            // HRV Recovery Pattern (if we have HRV samples)
+            const hrvSamples = mainSession.hrv?.items?.filter((v): v is number => v !== null) ?? [];
+            if (hrvSamples.length >= 4) {
+              const recovery = hrvRecoveryPattern(hrvSamples);
+              if (recovery.pattern !== "insufficient_data") {
+                sections.push(`- Recovery Pattern: ${recovery.pattern.replace("_", " ")} (first half: ${recovery.firstHalfAvg}ms, second half: ${recovery.secondHalfAvg}ms)`);
+              }
             }
           }
         }

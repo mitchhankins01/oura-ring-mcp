@@ -120,7 +120,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 
 See [README.md](README.md#roadmap) for the full roadmap with detailed checklists.
 
-**Current status:** Phase 3 (Make it Smart) nearly complete. Smart tools, derived metrics, and prompts done. HRV-specific features and visualization data remain.
+**Current status:** Phase 3 (Make it Smart) nearly complete. Smart tools, derived metrics, and prompts done. HRV-specific features out of scope (API limitation: no R-R intervals). Visualization data tools remain optional.
 
 ## Key Files
 
