@@ -735,7 +735,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
             content: [
               {
                 type: "text" as const,
-                text: `No tags found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Tags are user-created notes in the Oura app.`,
+                text: `No tags found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Tags are manual lifestyle notes you add in the Oura app (like caffeine, alcohol, or custom notes) to track how habits affect your health. Workouts are tracked automatically via get_workouts.`,
               },
             ],
           };
@@ -789,7 +789,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
             content: [
               {
                 type: "text" as const,
-                text: `No enhanced tags found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Enhanced tags are created in the Oura app and include both predefined categories and custom user tags.`,
+                text: `No enhanced tags found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Tags are manual lifestyle notes you add in the Oura app (like caffeine, alcohol, stress, or custom notes). Workouts and sleep are tracked automatically—use get_workouts or get_sleep instead.`,
               },
             ],
           };
@@ -1561,7 +1561,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
             content: [
               {
                 type: "text" as const,
-                text: `No tags found in the past ${days} days. Use tags in the Oura app to track factors like alcohol, caffeine, or custom conditions.`,
+                text: `No tags found in the past ${days} days. Tags are manual lifestyle notes you add in the Oura app—try tracking alcohol, caffeine, late meals, or stress to see how they affect your sleep.`,
               },
             ],
           };
