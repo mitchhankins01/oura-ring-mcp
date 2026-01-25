@@ -278,6 +278,36 @@ pnpm update-types     # Update spec AND generate types (convenience)
 OURA_ACCESS_TOKEN=your_token npx ts-node scripts/validate-fixtures.ts  # Compare fixtures to real API
 ```
 
+## Publishing Releases
+
+**IMPORTANT:** After significant changes, publish to both npm AND MCP registry.
+
+```bash
+# 1. Bump version
+npm version patch  # or minor/major
+
+# 2. Build, test, and verify coverage
+pnpm build && pnpm test:coverage
+
+# 3. Publish to npm
+npm publish
+
+# 4. Update server.json version to match package.json
+# Edit server.json: update both "version" fields to match
+
+# 5. Publish to MCP registry
+npx @anthropic-ai/mcp-publisher publish
+
+# 6. Push to GitHub
+git push && git push --tags
+```
+
+**When to publish:**
+- New features or tools
+- Bug fixes
+- Documentation improvements that affect usage
+- NOT needed for: internal refactors, test-only changes, CLAUDE.md updates
+
 ## Testing Strategy
 
 We use **Vitest** for testing with the following structure:
