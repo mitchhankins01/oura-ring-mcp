@@ -1580,6 +1580,7 @@ describe("Tool Handlers", () => {
     it("should handle no tags at all", async () => {
       mockClient = createMockClient({
         getEnhancedTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
+        getTags: vi.fn().mockResolvedValue({ data: [], next_token: null }),
       });
       registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
 

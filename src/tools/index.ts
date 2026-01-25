@@ -1540,49 +1540,67 @@ export function registerTools(server: McpServer, client: OuraClient) {
         const endDate = getToday();
         const startDate = getDaysAgo(days);
 
-        // Fetch tags and sleep data
-        const [tagsResult, sleepResult, scoresResult, readinessResult] = await Promise.allSettled([
+        // Fetch both enhanced tags AND regular tags, plus sleep data
+        const [enhancedTagsResult, regularTagsResult, sleepResult, scoresResult, readinessResult] = await Promise.allSettled([
           client.getEnhancedTags(startDate, endDate),
+          client.getTags(startDate, endDate),
           client.getSleep(startDate, endDate),
           client.getDailySleep(startDate, endDate),
           client.getDailyReadiness(startDate, endDate),
         ]);
 
-        const tags = tagsResult.status === "fulfilled" ? tagsResult.value.data : [];
+        const enhancedTags = enhancedTagsResult.status === "fulfilled" ? enhancedTagsResult.value.data : [];
+        const regularTags = regularTagsResult.status === "fulfilled" ? regularTagsResult.value.data : [];
         const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
         const sessions = allSleep.filter((s) => s.type === "long_sleep");
         const scores = scoresResult.status === "fulfilled" ? scoresResult.value.data : [];
         const readiness = readinessResult.status === "fulfilled" ? readinessResult.value.data : [];
 
-        if (tags.length === 0) {
+        if (enhancedTags.length === 0 && regularTags.length === 0) {
           return {
             content: [
               {
                 type: "text" as const,
-                text: `No tags found in the past ${days} days. Use enhanced tags in the Oura app to track factors like alcohol, caffeine, or custom conditions.`,
+                text: `No tags found in the past ${days} days. Use tags in the Oura app to track factors like alcohol, caffeine, or custom conditions.`,
               },
             ],
           };
         }
 
-        // Find days with the specified tag (match by custom_name or tag_type_code)
+        // Find days with the specified tag
+        // Check enhanced tags (custom_name or tag_type_code) and regular tags (tags[] array)
         const tagLower = tag.toLowerCase();
-        const daysWithTag = new Set(
-          tags
-            .filter((t) => {
-              const customMatch = t.custom_name?.toLowerCase().includes(tagLower);
-              const codeMatch = t.tag_type_code?.toLowerCase().includes(tagLower);
-              return customMatch || codeMatch;
-            })
-            .map((t) => t.start_day)
-        );
+        const daysWithTag = new Set<string>();
+
+        // Check enhanced tags
+        for (const t of enhancedTags) {
+          const customMatch = t.custom_name?.toLowerCase().includes(tagLower);
+          const codeMatch = t.tag_type_code?.toLowerCase().includes(tagLower);
+          if (customMatch || codeMatch) {
+            daysWithTag.add(t.start_day);
+          }
+        }
+
+        // Check regular tags (predefined tags like "caffeine", "alcohol")
+        for (const t of regularTags) {
+          for (const tagName of t.tags) {
+            if (tagName.toLowerCase().includes(tagLower)) {
+              daysWithTag.add(t.day);
+            }
+          }
+        }
 
         if (daysWithTag.size === 0) {
+          // Collect all available tags for the error message
+          const allTagNames = new Set<string>();
+          enhancedTags.forEach((t) => allTagNames.add(t.custom_name || t.tag_type_code || "unknown"));
+          regularTags.forEach((t) => t.tags.forEach((name) => allTagNames.add(name)));
+
           return {
             content: [
               {
                 type: "text" as const,
-                text: `No "${tag}" tags found. Available tags in this period: ${[...new Set(tags.map((t) => t.custom_name || t.tag_type_code))].join(", ")}`,
+                text: `No "${tag}" tags found. Available tags in this period: ${[...allTagNames].join(", ")}`,
               },
             ],
           };
@@ -1727,19 +1745,21 @@ export function registerTools(server: McpServer, client: OuraClient) {
         const endDate = getToday();
         const startDate = getDaysAgo(days);
 
-        // Fetch all relevant data
-        const [sleepResult, scoresResult, activityResult, tagsResult] = await Promise.allSettled([
+        // Fetch all relevant data (including both enhanced and regular tags)
+        const [sleepResult, scoresResult, activityResult, enhancedTagsResult, regularTagsResult] = await Promise.allSettled([
           client.getSleep(startDate, endDate),
           client.getDailySleep(startDate, endDate),
           client.getDailyActivity(startDate, endDate),
           client.getEnhancedTags(startDate, endDate),
+          client.getTags(startDate, endDate),
         ]);
 
         const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
         const sessions = allSleep.filter((s) => s.type === "long_sleep");
         const scores = scoresResult.status === "fulfilled" ? scoresResult.value.data : [];
         const activity = activityResult.status === "fulfilled" ? activityResult.value.data : [];
-        const tags = tagsResult.status === "fulfilled" ? tagsResult.value.data : [];
+        const enhancedTags = enhancedTagsResult.status === "fulfilled" ? enhancedTagsResult.value.data : [];
+        const regularTags = regularTagsResult.status === "fulfilled" ? regularTagsResult.value.data : [];
 
         if (sessions.length < 10) {
           return {
@@ -1755,11 +1775,18 @@ export function registerTools(server: McpServer, client: OuraClient) {
         // Create lookup maps
         const scoresByDay = new Map(scores.map((s) => [s.day, s.score ?? 0]));
         const activityByDay = new Map(activity.map((a) => [a.day, a]));
+
+        // Combine enhanced tags and regular tags into tagsByDay
         const tagsByDay = new Map<string, string[]>();
-        tags.forEach((t) => {
+        enhancedTags.forEach((t) => {
           const existing = tagsByDay.get(t.start_day) || [];
           existing.push(t.custom_name || t.tag_type_code || "unknown");
           tagsByDay.set(t.start_day, existing);
+        });
+        regularTags.forEach((t) => {
+          const existing = tagsByDay.get(t.day) || [];
+          existing.push(...t.tags);
+          tagsByDay.set(t.day, existing);
         });
 
         // Classify nights as good, average, or poor based on sleep score quartiles
