@@ -28,6 +28,8 @@ import {
   formatScore,
   getToday,
   percentage,
+  formatError,
+  getNoDataMessage,
 } from "../utils/index.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -60,7 +62,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
             content: [
               {
                 type: "text" as const,
-                text: `No sleep data found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Make sure your Oura Ring has synced.`,
+                text: getNoDataMessage("sleep", startDate, endDate),
               },
             ],
           };
@@ -82,7 +84,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching sleep data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -155,7 +157,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching readiness data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -224,7 +226,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching activity data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -278,7 +280,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching stress data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -332,7 +334,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching daily sleep data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -386,7 +388,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching heart rate data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -440,7 +442,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching workout data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -494,7 +496,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching SpO2 data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -548,7 +550,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching VO2 max data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -602,7 +604,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching resilience data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -656,7 +658,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching cardiovascular age data: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -710,7 +712,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching tags: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };
@@ -764,7 +766,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
           content: [
             {
               type: "text" as const,
-              text: `Error fetching sessions: ${error instanceof Error ? error.message : "Unknown error"}`,
+              text: formatError(error),
             },
           ],
         };

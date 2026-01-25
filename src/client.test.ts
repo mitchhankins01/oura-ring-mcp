@@ -91,11 +91,12 @@ describe("OuraClient", () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 401,
+        statusText: "Unauthorized",
         text: () => Promise.resolve("Unauthorized"),
       });
 
       await expect(client.getSleep("2024-01-15", "2024-01-15")).rejects.toThrow(
-        "Oura API error (401): Unauthorized"
+        "Authentication failed: Your Oura access token is invalid or expired"
       );
     });
 
@@ -103,11 +104,12 @@ describe("OuraClient", () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
+        statusText: "Internal Server Error",
         text: () => Promise.resolve("Internal Server Error"),
       });
 
       await expect(client.getDailyReadiness("2024-01-15", "2024-01-15")).rejects.toThrow(
-        "Oura API error (500): Internal Server Error"
+        "Oura API is temporarily unavailable (500)"
       );
     });
 
@@ -115,11 +117,12 @@ describe("OuraClient", () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 403,
+        statusText: "Forbidden",
         text: () => Promise.resolve("Forbidden - insufficient scope"),
       });
 
       await expect(client.getDailyActivity("2024-01-15", "2024-01-15")).rejects.toThrow(
-        "Oura API error (403): Forbidden - insufficient scope"
+        "Access denied: Your token doesn't have permission for this data"
       );
     });
   });

@@ -158,7 +158,6 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_sleep")!;
       const result = await handler({ start_date: "2024-01-15" });
 
-      expect(result.content[0].text).toContain("Error fetching sleep data");
       expect(result.content[0].text).toContain("API connection failed");
     });
 
@@ -220,7 +219,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_readiness")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching readiness data");
+      expect(result.content[0].text).toContain("Network error");
     });
   });
 
@@ -268,7 +267,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_activity")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching activity data");
+      expect(result.content[0].text).toContain("Activity API error");
       expect(result.content[0].text).toContain("Activity API error");
     });
   });
@@ -330,7 +329,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_stress")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching stress data");
+      expect(result.content[0].text).toContain("Stress API error");
     });
   });
 
@@ -380,7 +379,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_daily_sleep")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching daily sleep data");
+      expect(result.content[0].text).toContain("Daily sleep API error");
     });
   });
 
@@ -428,7 +427,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_heart_rate")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching heart rate data");
+      expect(result.content[0].text).toContain("Heart rate API error");
     });
   });
 
@@ -507,7 +506,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_workouts")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching workout data");
+      expect(result.content[0].text).toContain("Workout API error");
     });
   });
 
@@ -613,7 +612,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_spo2")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching SpO2 data");
+      expect(result.content[0].text).toContain("SpO2 API error");
     });
   });
 
@@ -747,7 +746,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_vo2_max")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching VO2 max data");
+      expect(result.content[0].text).toContain("VO2 max API error");
     });
   });
 
@@ -792,7 +791,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_resilience")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching resilience data");
+      expect(result.content[0].text).toContain("Resilience API error");
     });
   });
 
@@ -843,7 +842,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_cardiovascular_age")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching cardiovascular age data");
+      expect(result.content[0].text).toContain("Cardiovascular age API error");
     });
   });
 
@@ -909,7 +908,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_tags")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching tags");
+      expect(result.content[0].text).toContain("Tags API error");
     });
   });
 
@@ -988,7 +987,7 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_sessions")!;
       const result = await handler({});
 
-      expect(result.content[0].text).toContain("Error fetching sessions");
+      expect(result.content[0].text).toContain("Sessions API error");
     });
   });
 

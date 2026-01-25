@@ -26,7 +26,8 @@ src/
 ├── transports/        # (Phase 4b) Alternative transports
 │   └── http.ts        # HTTP/SSE for remote access
 └── utils/
-    └── formatters.ts  # Human-readable formatting (seconds→hours, etc.)
+    ├── formatters.ts  # Human-readable formatting (seconds→hours, etc.)
+    └── errors.ts      # Custom error types and user-friendly messages
 
 scripts/
 └── validate-fixtures.ts  # Compare test fixtures against real Oura API
@@ -88,7 +89,7 @@ scripts/
   - [x] `get_tags` - User-created tags and notes
   - [x] `get_sessions` - Meditation/breathing sessions
 - [x] Add MCP resources (`oura://today`, `oura://weekly-summary`)
-- [ ] Better error messages
+- [x] Better error messages (OuraApiError class, user-friendly messages, no-data tips)
 - [x] Set up Vitest with coverage thresholds (75/80/80/80)
 - [x] Create test infrastructure (fixtures, helpers directories)
 - [x] Write comprehensive tests for formatters (96%+ coverage achieved)
@@ -102,7 +103,7 @@ scripts/
 ### Phase 3: Make it Smart
 See `docs/RESEARCH.md` for detailed inspiration, formulas, and code examples from Wearipedia notebook.
 
-**Derived metrics to compute:**
+**Derived metrics to compute:**1
 - [ ] Sleep stage ratios (deep/REM/light as % of total sleep)
 - [ ] Sleep debt tracking (vs 8hr target)
 - [ ] Sleep score formula (efficiency + deep% + REM%)
@@ -140,7 +141,6 @@ See `docs/RESEARCH.md` for detailed inspiration, formulas, and code examples fro
 
 **MCP features:**
 - [ ] Prompts for common analysis tasks
-- [ ] Resources: `oura://today`, `oura://weekly-report`
 
 ### Phase 4a: Ship It (Local)
 - [ ] CLI auth flow: `npx oura-mcp auth` (for when PAT deprecated end of 2025)
@@ -233,9 +233,10 @@ We use **Vitest** for testing with the following structure:
 
 **What We Test:**
 1. **Formatters** (`utils/formatters.ts`) - Unit tests, 90%+ coverage target
-2. **Tool Handlers** (`tools/index.ts`) - Unit tests with mocked client
-3. **Oura Client** (`client.ts`) - Integration tests with mocked fetch
-4. **MCP Server** (`index.ts`) - Integration tests with mocked SDK
+2. **Error utilities** (`utils/errors.ts`) - Unit tests for error formatting
+3. **Tool Handlers** (`tools/index.ts`) - Unit tests with mocked client
+4. **Oura Client** (`client.ts`) - Integration tests with mocked fetch
+5. **MCP Server** (`index.ts`) - Integration tests with mocked SDK
 
 **Mock Strategy:**
 - Oura API calls → `nock` or `msw` for deterministic testing

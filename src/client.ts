@@ -4,6 +4,7 @@
  */
 
 import type { components } from "./types/oura-api.js";
+import { OuraApiError } from "./utils/errors.js";
 
 const BASE_URL = "https://api.ouraring.com/v2/usercollection";
 
@@ -59,8 +60,8 @@ export class OuraClient {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Oura API error (${response.status}): ${error}`);
+      const body = await response.text();
+      throw new OuraApiError(response.status, response.statusText, body);
     }
 
     return response.json() as Promise<T>;
