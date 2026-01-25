@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": "180c239d-5dc6-4253-9f46-1d7ba0ae8b5f",
+      "day": "2024-01-15",
+      "optimal_bedtime": {
+        "day_tz": 3600,
+        "end_offset": -6300,
+        "start_offset": -10800
+      },
+      "recommendation": "follow_optimal_bedtime",
+      "status": "optimal_found"
+    }
+  ],
+  "next_token": null
+}

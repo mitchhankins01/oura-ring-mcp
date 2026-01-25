@@ -19,7 +19,11 @@ import vo2maxResponse from "../tests/fixtures/oura-vo2max-response.json" with { 
 import resilienceResponse from "../tests/fixtures/oura-resilience-response.json" with { type: "json" };
 import cardiovascularAgeResponse from "../tests/fixtures/oura-cardiovascular-age-response.json" with { type: "json" };
 import tagsResponse from "../tests/fixtures/oura-tags-response.json" with { type: "json" };
+import enhancedTagsResponse from "../tests/fixtures/oura-enhanced-tags-response.json" with { type: "json" };
 import sessionsResponse from "../tests/fixtures/oura-sessions-response.json" with { type: "json" };
+import restModeResponse from "../tests/fixtures/oura-rest-mode-response.json" with { type: "json" };
+import ringConfigurationResponse from "../tests/fixtures/oura-ring-configuration-response.json" with { type: "json" };
+import sleepTimeResponse from "../tests/fixtures/oura-sleep-time-response.json" with { type: "json" };
 import personalInfoResponse from "../tests/fixtures/oura-personal-info-response.json" with { type: "json" };
 
 const TEST_TOKEN = "test-access-token-123";
@@ -140,7 +144,6 @@ describe("OuraClient", () => {
 
       const result = await client.getSleep("2024-01-15", "2024-01-15");
 
-      expect(result).toEqual(sleepResponse);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].day).toBe("2024-01-15");
     });
@@ -154,6 +157,57 @@ describe("OuraClient", () => {
       const result = await client.getSleep("2024-01-15", "2024-01-15");
 
       expect(result.data).toHaveLength(0);
+    });
+
+    it("should expand single-date queries by ±1 day (API workaround)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(sleepResponse),
+      });
+
+      await client.getSleep("2024-01-15", "2024-01-15");
+
+      // Verify the API was called with expanded date range
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-14");
+      expect(calledUrl).toContain("end_date=2024-01-16");
+    });
+
+    it("should filter results to only include requested date", async () => {
+      // API returns data for multiple days
+      const multiDayResponse = {
+        data: [
+          { ...sleepResponse.data[0], day: "2024-01-14" },
+          { ...sleepResponse.data[0], day: "2024-01-15" },
+          { ...sleepResponse.data[0], day: "2024-01-16" },
+        ],
+        next_token: null,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(multiDayResponse),
+      });
+
+      const result = await client.getSleep("2024-01-15", "2024-01-15");
+
+      // Should only return the requested date
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].day).toBe("2024-01-15");
+    });
+
+    it("should NOT expand multi-day range queries", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(sleepResponse),
+      });
+
+      await client.getSleep("2024-01-10", "2024-01-15");
+
+      // Verify the API was called with exact dates (no expansion)
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-10");
+      expect(calledUrl).toContain("end_date=2024-01-15");
     });
   });
 
@@ -203,9 +257,59 @@ describe("OuraClient", () => {
 
       const result = await client.getDailyActivity("2024-01-15", "2024-01-15");
 
-      expect(result).toEqual(activityResponse);
       expect(result.data[0].steps).toBe(8500);
       expect(result.data[0].active_calories).toBe(450);
+    });
+
+    it("should expand single-date queries by ±1 day (API workaround)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(activityResponse),
+      });
+
+      await client.getDailyActivity("2024-01-15", "2024-01-15");
+
+      // Verify the API was called with expanded date range
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-14");
+      expect(calledUrl).toContain("end_date=2024-01-16");
+    });
+
+    it("should filter results to only include requested date", async () => {
+      // API returns data for multiple days
+      const multiDayResponse = {
+        data: [
+          { ...activityResponse.data[0], day: "2024-01-14" },
+          { ...activityResponse.data[0], day: "2024-01-15" },
+          { ...activityResponse.data[0], day: "2024-01-16" },
+        ],
+        next_token: null,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(multiDayResponse),
+      });
+
+      const result = await client.getDailyActivity("2024-01-15", "2024-01-15");
+
+      // Should only return the requested date
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].day).toBe("2024-01-15");
+    });
+
+    it("should NOT expand multi-day range queries", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(activityResponse),
+      });
+
+      await client.getDailyActivity("2024-01-10", "2024-01-15");
+
+      // Verify the API was called with exact dates (no expansion)
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-10");
+      expect(calledUrl).toContain("end_date=2024-01-15");
     });
   });
 
@@ -261,9 +365,59 @@ describe("OuraClient", () => {
 
       const result = await client.getWorkouts("2024-01-15", "2024-01-15");
 
-      expect(result).toEqual(workoutResponse);
       expect(result.data[0].activity).toBe("running");
       expect(result.data[0].calories).toBe(350);
+    });
+
+    it("should expand single-date queries by ±1 day (API workaround)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(workoutResponse),
+      });
+
+      await client.getWorkouts("2024-01-15", "2024-01-15");
+
+      // Verify the API was called with expanded date range
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-14");
+      expect(calledUrl).toContain("end_date=2024-01-16");
+    });
+
+    it("should filter results to only include requested date", async () => {
+      // API returns data for multiple days
+      const multiDayResponse = {
+        data: [
+          { ...workoutResponse.data[0], day: "2024-01-14" },
+          { ...workoutResponse.data[0], day: "2024-01-15" },
+          { ...workoutResponse.data[0], day: "2024-01-16" },
+        ],
+        next_token: null,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(multiDayResponse),
+      });
+
+      const result = await client.getWorkouts("2024-01-15", "2024-01-15");
+
+      // Should only return the requested date
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].day).toBe("2024-01-15");
+    });
+
+    it("should NOT expand multi-day range queries", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(workoutResponse),
+      });
+
+      await client.getWorkouts("2024-01-10", "2024-01-15");
+
+      // Verify the API was called with exact dates (no expansion)
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-10");
+      expect(calledUrl).toContain("end_date=2024-01-15");
     });
   });
 
@@ -366,9 +520,124 @@ describe("OuraClient", () => {
 
       const result = await client.getTags("2024-01-15", "2024-01-15");
 
-      expect(result).toEqual(tagsResponse);
       expect(result.data[0].text).toBe("Had coffee after 2pm");
       expect(result.data[0].tags).toContain("caffeine");
+    });
+
+    it("should expand single-date queries by ±1 day (API workaround)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(tagsResponse),
+      });
+
+      await client.getTags("2024-01-15", "2024-01-15");
+
+      // Verify the API was called with expanded date range
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-14");
+      expect(calledUrl).toContain("end_date=2024-01-16");
+    });
+
+    it("should filter results to only include requested date", async () => {
+      // API returns data for multiple days
+      const multiDayResponse = {
+        data: [
+          { ...tagsResponse.data[0], day: "2024-01-14" },
+          { ...tagsResponse.data[0], day: "2024-01-15" },
+          { ...tagsResponse.data[0], day: "2024-01-16" },
+        ],
+        next_token: null,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(multiDayResponse),
+      });
+
+      const result = await client.getTags("2024-01-15", "2024-01-15");
+
+      // Should only return the requested date
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].day).toBe("2024-01-15");
+    });
+
+    it("should NOT expand multi-day range queries", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(tagsResponse),
+      });
+
+      await client.getTags("2024-01-10", "2024-01-15");
+
+      // Verify the API was called with original date range
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-10");
+      expect(calledUrl).toContain("end_date=2024-01-15");
+    });
+  });
+
+  describe("getEnhancedTags", () => {
+    it("should fetch enhanced tags data", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(enhancedTagsResponse),
+      });
+
+      const result = await client.getEnhancedTags("2024-01-15", "2024-01-15");
+
+      expect(result.data[0].tag_type_code).toBe("tag_sleep_aid");
+      expect(result.data[1].custom_name).toBe("Caffeine");
+    });
+
+    it("should expand single-date queries by ±3 days (API workaround)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(enhancedTagsResponse),
+      });
+
+      await client.getEnhancedTags("2024-01-15", "2024-01-15");
+
+      // Verify the API was called with expanded date range (±3 days for enhanced_tag)
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-12");
+      expect(calledUrl).toContain("end_date=2024-01-18");
+    });
+
+    it("should filter results to only include requested date", async () => {
+      // API returns data for multiple days
+      const multiDayResponse = {
+        data: [
+          { ...enhancedTagsResponse.data[0], start_day: "2024-01-14" },
+          { ...enhancedTagsResponse.data[0], start_day: "2024-01-15" },
+          { ...enhancedTagsResponse.data[0], start_day: "2024-01-16" },
+        ],
+        next_token: null,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(multiDayResponse),
+      });
+
+      const result = await client.getEnhancedTags("2024-01-15", "2024-01-15");
+
+      // Should only return the requested date
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].start_day).toBe("2024-01-15");
+    });
+
+    it("should NOT expand multi-day range queries", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(enhancedTagsResponse),
+      });
+
+      await client.getEnhancedTags("2024-01-10", "2024-01-15");
+
+      // Verify the API was called with original date range
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-10");
+      expect(calledUrl).toContain("end_date=2024-01-15");
     });
   });
 
@@ -385,9 +654,127 @@ describe("OuraClient", () => {
 
       const result = await client.getSessions("2024-01-15", "2024-01-15");
 
-      expect(result).toEqual(sessionsResponse);
       expect(result.data[0].type).toBe("meditation");
       expect(result.data[0].mood).toBe("good");
+    });
+
+    it("should expand single-date queries by ±1 day (API workaround)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(sessionsResponse),
+      });
+
+      await client.getSessions("2024-01-15", "2024-01-15");
+
+      // Verify the API was called with expanded date range
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-14");
+      expect(calledUrl).toContain("end_date=2024-01-16");
+    });
+
+    it("should filter results to only include requested date", async () => {
+      // API returns data for multiple days
+      const multiDayResponse = {
+        data: [
+          { ...sessionsResponse.data[0], day: "2024-01-14" },
+          { ...sessionsResponse.data[0], day: "2024-01-15" },
+          { ...sessionsResponse.data[0], day: "2024-01-16" },
+        ],
+        next_token: null,
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(multiDayResponse),
+      });
+
+      const result = await client.getSessions("2024-01-15", "2024-01-15");
+
+      // Should only return the requested date
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].day).toBe("2024-01-15");
+    });
+
+    it("should NOT expand multi-day range queries", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(sessionsResponse),
+      });
+
+      await client.getSessions("2024-01-10", "2024-01-15");
+
+      // Verify the API was called with exact dates (no expansion)
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toContain("start_date=2024-01-10");
+      expect(calledUrl).toContain("end_date=2024-01-15");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Rest mode endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  describe("getRestModePeriods", () => {
+    it("should fetch rest mode periods", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(restModeResponse),
+      });
+
+      const result = await client.getRestModePeriods("2024-01-15", "2024-01-15");
+
+      expect(result.data[0].start_day).toBe("2024-01-15");
+      expect(result.data[0].episodes).toEqual([]);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Ring configuration endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  describe("getRingConfiguration", () => {
+    it("should fetch ring configuration without date params", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(ringConfigurationResponse),
+      });
+
+      const result = await client.getRingConfiguration();
+
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].hardware_type).toBe("gen3");
+      expect(result.data[1].hardware_type).toBe("gen4");
+    });
+
+    it("should call ring_configuration endpoint without date params", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(ringConfigurationResponse),
+      });
+
+      await client.getRingConfiguration();
+
+      const calledUrl = mockFetch.mock.calls[0][0];
+      expect(calledUrl).toBe(`${BASE_URL}/ring_configuration`);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Sleep time endpoints
+  // ─────────────────────────────────────────────────────────────
+
+  describe("getSleepTime", () => {
+    it("should fetch sleep time recommendations", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(sleepTimeResponse),
+      });
+
+      const result = await client.getSleepTime("2024-01-15", "2024-01-15");
+
+      expect(result.data[0].day).toBe("2024-01-15");
+      expect(result.data[0].recommendation).toBe("follow_optimal_bedtime");
+      expect(result.data[0].status).toBe("optimal_found");
     });
   });
 

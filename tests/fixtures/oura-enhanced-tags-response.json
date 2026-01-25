@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "id": "283572c8-763d-4868-8610-4e840c5f0c0a",
+      "tag_type_code": "tag_sleep_aid",
+      "start_time": "2024-01-15T20:43:08-07:00",
+      "end_time": null,
+      "start_day": "2024-01-15",
+      "end_day": null,
+      "comment": null,
+      "custom_name": null
+    },
+    {
+      "id": "29c5d0ec-d1e9-4734-8fbc-f665ce254a27",
+      "tag_type_code": "custom",
+      "start_time": "2024-01-15T11:00:00-07:00",
+      "end_time": null,
+      "start_day": "2024-01-15",
+      "end_day": null,
+      "comment": "",
+      "custom_name": "Caffeine"
+    }
+  ],
+  "next_token": null
+}

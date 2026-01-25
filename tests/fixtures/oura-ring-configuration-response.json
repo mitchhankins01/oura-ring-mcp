@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "id": "f132e6b3-6e0e-4ef2-80f4-265742e7c40d",
+      "color": "glossy_black",
+      "design": "heritage",
+      "firmware_version": "3.2.2",
+      "hardware_type": "gen3",
+      "set_up_at": "2023-10-06T00:00:00.000Z",
+      "size": 12
+    },
+    {
+      "id": "ed936a3e-4482-45bd-939b-48b5f70e1f68",
+      "color": "glossy_black",
+      "design": null,
+      "firmware_version": "2.9.3",
+      "hardware_type": "gen4",
+      "set_up_at": "2025-09-22T00:00:00.000Z",
+      "size": 12
+    }
+  ],
+  "next_token": null
+}

@@ -20,6 +20,7 @@ import {
   DailyResilience,
   DailyCardiovascularAge,
   Tag,
+  EnhancedTag,
   Session,
 } from "../client.js";
 import {
@@ -55,9 +56,16 @@ export function registerTools(server: McpServer, client: OuraClient) {
         const startDate = start_date || getToday();
         const endDate = end_date || startDate;
 
-        const response = await client.getSleep(startDate, endDate);
+        // Fetch both detailed sessions AND daily scores in parallel
+        const [sessionsResult, scoresResult] = await Promise.allSettled([
+          client.getSleep(startDate, endDate),
+          client.getDailySleep(startDate, endDate),
+        ]);
 
-        if (response.data.length === 0) {
+        const sessions = sessionsResult.status === "fulfilled" ? sessionsResult.value.data : [];
+        const scores = scoresResult.status === "fulfilled" ? scoresResult.value.data : [];
+
+        if (sessions.length === 0 && scores.length === 0) {
           return {
             content: [
               {
@@ -68,8 +76,27 @@ export function registerTools(server: McpServer, client: OuraClient) {
           };
         }
 
-        // Format each sleep session with human-readable summary + raw data
-        const formatted = response.data.map((session) => formatSleepSession(session));
+        // Create a map of day -> score for easy lookup
+        const scoresByDay = new Map(scores.map((s) => [s.day, s]));
+
+        // Format each sleep session with its corresponding score
+        const formatted = sessions.map((session) => {
+          const dailyScore = scoresByDay.get(session.day);
+          return formatSleepSession(session, dailyScore);
+        });
+
+        // If we have scores but no sessions (rare edge case), show scores only
+        if (sessions.length === 0 && scores.length > 0) {
+          const scoreOnlyFormatted = scores.map((day) => formatDailySleep(day));
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: scoreOnlyFormatted.join("\n\n---\n\n"),
+              },
+            ],
+          };
+        }
 
         return {
           content: [
@@ -721,6 +748,60 @@ export function registerTools(server: McpServer, client: OuraClient) {
   );
 
   // ─────────────────────────────────────────────────────────────
+  // get_enhanced_tags tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_enhanced_tags",
+    {
+      description:
+        "Get enhanced tags with rich data including custom tags, timestamps, and durations. Enhanced tags include predefined categories (sleep_aid, caffeine, alcohol, etc.) and custom user-created tags with names like medications, supplements, or lifestyle factors.",
+      inputSchema: {
+        start_date: z.string().optional().describe("Start date in YYYY-MM-DD format. Defaults to today."),
+        end_date: z.string().optional().describe("End date in YYYY-MM-DD format. Defaults to start_date."),
+      },
+    },
+    async ({ start_date, end_date }) => {
+      try {
+        const startDate = start_date || getToday();
+        const endDate = end_date || startDate;
+
+        const response = await client.getEnhancedTags(startDate, endDate);
+
+        if (response.data.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `No enhanced tags found for ${startDate}${startDate !== endDate ? ` to ${endDate}` : ""}. Enhanced tags are created in the Oura app and include both predefined categories and custom user tags.`,
+              },
+            ],
+          };
+        }
+
+        const formatted = response.data.map((tag) => formatEnhancedTag(tag));
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatted.join("\n\n---\n\n"),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: formatError(error),
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
   // get_sessions tool
   // ─────────────────────────────────────────────────────────────
   server.registerTool(
@@ -779,7 +860,7 @@ export function registerTools(server: McpServer, client: OuraClient) {
 // Formatting helpers
 // ─────────────────────────────────────────────────────────────
 
-function formatSleepSession(session: SleepSession): string {
+function formatSleepSession(session: SleepSession, dailyScore?: DailySleep): string {
   // Handle null values with defaults
   const totalSleep = session.total_sleep_duration ?? 0;
   const timeInBed = session.time_in_bed ?? 0;
@@ -792,6 +873,14 @@ function formatSleepSession(session: SleepSession): string {
 
   const lines = [
     `## Sleep: ${session.day}`,
+  ];
+
+  // Include score from daily_sleep if available
+  if (dailyScore?.score != null) {
+    lines.push(`**Score:** ${formatScore(dailyScore.score)}`);
+  }
+
+  lines.push(
     `**Bedtime:** ${formatTime(session.bedtime_start)} → ${formatTime(session.bedtime_end)}`,
     `**Total Sleep:** ${formatDuration(totalSleep)} (of ${formatDuration(timeInBed)} in bed)`,
     `**Efficiency:** ${efficiency}%`,
@@ -801,7 +890,7 @@ function formatSleepSession(session: SleepSession): string {
     `- REM: ${formatDuration(remSleep)} (${percentage(remSleep, totalSleep)}%)`,
     `- Light: ${formatDuration(lightSleep)} (${percentage(lightSleep, totalSleep)}%)`,
     `- Awake: ${formatDuration(awakeTime)}`,
-  ];
+  );
 
   // Add biometrics if available
   if (session.average_heart_rate || session.average_hrv) {
@@ -1048,6 +1137,41 @@ function formatTag(tag: Tag): string {
   }
 
   return lines.join("\n");
+}
+
+function formatEnhancedTag(tag: EnhancedTag): string {
+  // Format the tag type - either custom name or predefined code
+  const tagName = tag.custom_name || formatTagTypeCode(tag.tag_type_code);
+
+  const lines = [
+    `## ${tagName}`,
+    `**Date:** ${tag.start_day}`,
+    `**Time:** ${formatTime(tag.start_time)}`,
+  ];
+
+  // Add duration if there's an end time
+  if (tag.end_time) {
+    lines.push(`**End:** ${formatTime(tag.end_time)}`);
+  }
+
+  // Add comment if present
+  if (tag.comment) {
+    lines.push(`**Note:** ${tag.comment}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatTagTypeCode(code: string | null | undefined): string {
+  if (!code) return "Tag";
+  if (code === "custom") return "Custom Tag";
+
+  // Convert tag_type_code like "tag_sleep_aid" to "Sleep Aid"
+  return code
+    .replace(/^tag_/, "")
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 function formatSession(session: Session): string {

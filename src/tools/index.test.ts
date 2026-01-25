@@ -21,6 +21,7 @@ import resilienceResponse from "../../tests/fixtures/oura-resilience-response.js
 import cardiovascularAgeResponse from "../../tests/fixtures/oura-cardiovascular-age-response.json" with { type: "json" };
 import tagsResponse from "../../tests/fixtures/oura-tags-response.json" with { type: "json" };
 import sessionsResponse from "../../tests/fixtures/oura-sessions-response.json" with { type: "json" };
+import enhancedTagsResponse from "../../tests/fixtures/oura-enhanced-tags-response.json" with { type: "json" };
 
 // Type for captured tool handlers
 type ToolHandler = (args: Record<string, unknown>) => Promise<{
@@ -58,6 +59,7 @@ function createMockClient(overrides: Partial<Record<keyof OuraClient, unknown>> 
     getDailyCardiovascularAge: vi.fn().mockResolvedValue(cardiovascularAgeResponse),
     getTags: vi.fn().mockResolvedValue(tagsResponse),
     getSessions: vi.fn().mockResolvedValue(sessionsResponse),
+    getEnhancedTags: vi.fn().mockResolvedValue(enhancedTagsResponse),
     getPersonalInfo: vi.fn().mockResolvedValue({}),
     ...overrides,
   } as unknown as OuraClient;
@@ -88,8 +90,8 @@ describe("Tool Handlers", () => {
   // ─────────────────────────────────────────────────────────────
 
   describe("registerTools", () => {
-    it("should register all 13 tools", () => {
-      expect(mockServer.getToolCount()).toBe(13);
+    it("should register all 14 tools", () => {
+      expect(mockServer.getToolCount()).toBe(14);
     });
 
     it("should register expected tool names", () => {
@@ -106,6 +108,7 @@ describe("Tool Handlers", () => {
         "get_resilience",
         "get_cardiovascular_age",
         "get_tags",
+        "get_enhanced_tags",
         "get_sessions",
       ];
 
@@ -140,7 +143,11 @@ describe("Tool Handlers", () => {
     });
 
     it("should handle empty response", async () => {
-      mockClient = createMockClient({ getSleep: vi.fn().mockResolvedValue(emptyResponse) });
+      // get_sleep now fetches both endpoints, so mock both as empty
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(emptyResponse),
+        getDailySleep: vi.fn().mockResolvedValue(emptyResponse),
+      });
       registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
 
       const handler = mockServer.getToolHandler("get_sleep")!;
@@ -149,7 +156,8 @@ describe("Tool Handlers", () => {
       expect(result.content[0].text).toContain("No sleep data found");
     });
 
-    it("should handle API errors", async () => {
+    it("should handle API errors gracefully with fallback to scores", async () => {
+      // If sessions fail but scores succeed, we should show scores
       mockClient = createMockClient({
         getSleep: vi.fn().mockRejectedValue(new Error("API connection failed")),
       });
@@ -158,7 +166,30 @@ describe("Tool Handlers", () => {
       const handler = mockServer.getToolHandler("get_sleep")!;
       const result = await handler({ start_date: "2024-01-15" });
 
-      expect(result.content[0].text).toContain("API connection failed");
+      // Should fall back to daily sleep scores
+      expect(result.content[0].text).toContain("Daily Sleep Score");
+    });
+
+    it("should handle both endpoints failing", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockRejectedValue(new Error("API connection failed")),
+        getDailySleep: vi.fn().mockRejectedValue(new Error("API connection failed")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_sleep")!;
+      const result = await handler({ start_date: "2024-01-15" });
+
+      expect(result.content[0].text).toContain("No sleep data found");
+    });
+
+    it("should include score from daily sleep endpoint", async () => {
+      const handler = mockServer.getToolHandler("get_sleep")!;
+      const result = await handler({ start_date: "2024-01-15" });
+
+      // Score should be included from the daily_sleep endpoint
+      expect(result.content[0].text).toContain("**Score:**");
+      expect(result.content[0].text).toContain("85");
     });
 
     it("should include biometrics when available", async () => {
@@ -913,6 +944,105 @@ describe("Tool Handlers", () => {
   });
 
   // ─────────────────────────────────────────────────────────────
+  // get_enhanced_tags tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("get_enhanced_tags", () => {
+    it("should return formatted enhanced tag data", async () => {
+      const handler = mockServer.getToolHandler("get_enhanced_tags")!;
+      const result = await handler({ start_date: "2024-01-15" });
+
+      expect(result.content[0].text).toContain("## Sleep Aid");
+      expect(result.content[0].text).toContain("**Date:** 2024-01-15");
+    });
+
+    it("should show custom tag names", async () => {
+      const handler = mockServer.getToolHandler("get_enhanced_tags")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("## Caffeine");
+    });
+
+    it("should format tag type codes as readable names", async () => {
+      const handler = mockServer.getToolHandler("get_enhanced_tags")!;
+      const result = await handler({});
+
+      // tag_sleep_aid should become "Sleep Aid"
+      expect(result.content[0].text).toContain("Sleep Aid");
+    });
+
+    it("should handle tag with comment", async () => {
+      mockClient = createMockClient({
+        getEnhancedTags: vi.fn().mockResolvedValue({
+          data: [{
+            id: "tag-123",
+            tag_type_code: "tag_generic_caffeine",
+            start_time: "2024-01-15T10:00:00-07:00",
+            end_time: null,
+            start_day: "2024-01-15",
+            end_day: null,
+            comment: "Morning espresso",
+            custom_name: null,
+          }],
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_enhanced_tags")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("**Note:** Morning espresso");
+    });
+
+    it("should show end time when available", async () => {
+      mockClient = createMockClient({
+        getEnhancedTags: vi.fn().mockResolvedValue({
+          data: [{
+            id: "tag-123",
+            tag_type_code: "tag_generic_nap",
+            start_time: "2024-01-15T14:00:00-07:00",
+            end_time: "2024-01-15T15:00:00-07:00",
+            start_day: "2024-01-15",
+            end_day: "2024-01-15",
+            comment: null,
+            custom_name: null,
+          }],
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_enhanced_tags")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("**End:**");
+    });
+
+    it("should handle empty response", async () => {
+      mockClient = createMockClient({ getEnhancedTags: vi.fn().mockResolvedValue(emptyResponse) });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_enhanced_tags")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("No enhanced tags found");
+    });
+
+    it("should handle errors", async () => {
+      mockClient = createMockClient({
+        getEnhancedTags: vi.fn().mockRejectedValue(new Error("Enhanced tags API error")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_enhanced_tags")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Enhanced tags API error");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
   // get_sessions tool
   // ─────────────────────────────────────────────────────────────
 
@@ -1004,7 +1134,11 @@ describe("Tool Handlers", () => {
     });
 
     it("should show date range in empty message", async () => {
-      mockClient = createMockClient({ getSleep: vi.fn().mockResolvedValue(emptyResponse) });
+      // get_sleep now fetches both endpoints, so mock both as empty
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(emptyResponse),
+        getDailySleep: vi.fn().mockResolvedValue(emptyResponse),
+      });
       registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
 
       const handler = mockServer.getToolHandler("get_sleep")!;

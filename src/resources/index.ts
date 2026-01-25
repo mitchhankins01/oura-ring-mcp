@@ -188,35 +188,82 @@ export function registerResources(server: McpServer, client: OuraClient): void {
 
       sections.push(`# Oura Weekly Summary (${weekAgo} to ${today})\n`);
 
-      // Fetch all data in parallel
-      const [sleepResult, readinessResult, activityResult] = await Promise.allSettled([
+      // Fetch all data in parallel (including detailed sleep sessions for duration averages)
+      const [sleepScoreResult, sleepSessionResult, readinessResult, activityResult] = await Promise.allSettled([
         client.getDailySleep(weekAgo, today),
+        client.getSleep(weekAgo, today),
         client.getDailyReadiness(weekAgo, today),
         client.getDailyActivity(weekAgo, today),
       ]);
 
-      // Sleep Summary
-      if (sleepResult.status === "fulfilled" && sleepResult.value.data.length > 0) {
-        const sleepData = sleepResult.value.data;
-        const scores = sleepData.map(s => s.score).filter((s): s is number => s !== null && s !== undefined);
+      // Sleep Summary - combine scores and detailed sessions
+      const hasScores = sleepScoreResult.status === "fulfilled" && sleepScoreResult.value.data.length > 0;
+      const hasSessions = sleepSessionResult.status === "fulfilled" && sleepSessionResult.value.data.length > 0;
 
+      if (hasScores || hasSessions) {
         sections.push("## Sleep");
-        sections.push(`- Days with data: ${sleepData.length}`);
 
-        if (scores.length > 0) {
-          const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-          const minScore = Math.min(...scores);
-          const maxScore = Math.max(...scores);
-          sections.push(`- Average Score: ${formatScore(avgScore)}`);
-          sections.push(`- Range: ${minScore} - ${maxScore}`);
+        // Scores from daily_sleep
+        if (hasScores) {
+          const sleepData = sleepScoreResult.value.data;
+          const scores = sleepData.map(s => s.score).filter((s): s is number => s !== null && s !== undefined);
 
-          // Best and worst days
-          const sortedByScore = [...sleepData].filter(s => s.score != null).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-          if (sortedByScore.length > 0) {
-            sections.push(`- Best day: ${sortedByScore[0].day} (${sortedByScore[0].score})`);
-            sections.push(`- Worst day: ${sortedByScore[sortedByScore.length - 1].day} (${sortedByScore[sortedByScore.length - 1].score})`);
+          sections.push(`- Days with data: ${sleepData.length}`);
+
+          if (scores.length > 0) {
+            const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+            const minScore = Math.min(...scores);
+            const maxScore = Math.max(...scores);
+            sections.push(`- Average Score: ${formatScore(avgScore)}`);
+            sections.push(`- Range: ${minScore} - ${maxScore}`);
+
+            // Best and worst days
+            const sortedByScore = [...sleepData].filter(s => s.score != null).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+            if (sortedByScore.length > 0) {
+              sections.push(`- Best day: ${sortedByScore[0].day} (${sortedByScore[0].score})`);
+              sections.push(`- Worst day: ${sortedByScore[sortedByScore.length - 1].day} (${sortedByScore[sortedByScore.length - 1].score})`);
+            }
           }
         }
+
+        // Detailed duration averages from sleep sessions
+        if (hasSessions) {
+          const sessions = sleepSessionResult.value.data;
+
+          // Get main session per day (longest one)
+          const sessionsByDay = new Map<string, typeof sessions[0]>();
+          for (const session of sessions) {
+            const existing = sessionsByDay.get(session.day);
+            if (!existing || (session.total_sleep_duration ?? 0) > (existing.total_sleep_duration ?? 0)) {
+              sessionsByDay.set(session.day, session);
+            }
+          }
+          const mainSessions = Array.from(sessionsByDay.values());
+
+          // Calculate averages
+          const durations = mainSessions.map(s => s.total_sleep_duration ?? 0).filter(d => d > 0);
+          const deepDurations = mainSessions.map(s => s.deep_sleep_duration ?? 0);
+          const remDurations = mainSessions.map(s => s.rem_sleep_duration ?? 0);
+          const hrvValues = mainSessions.map(s => s.average_hrv).filter((h): h is number => h !== null && h !== undefined);
+
+          if (durations.length > 0) {
+            const avgDuration = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
+            const avgDeep = Math.round(deepDurations.reduce((a, b) => a + b, 0) / deepDurations.length);
+            const avgRem = Math.round(remDurations.reduce((a, b) => a + b, 0) / remDurations.length);
+
+            sections.push("");
+            sections.push("**Sleep Duration:**");
+            sections.push(`- Average: ${formatDuration(avgDuration)}/night`);
+            sections.push(`- Deep: ${formatDuration(avgDeep)} avg (${percentage(avgDeep, avgDuration)}%)`);
+            sections.push(`- REM: ${formatDuration(avgRem)} avg (${percentage(avgRem, avgDuration)}%)`);
+          }
+
+          if (hrvValues.length > 0) {
+            const avgHrv = Math.round(hrvValues.reduce((a, b) => a + b, 0) / hrvValues.length);
+            sections.push(`- Avg HRV: ${avgHrv} ms`);
+          }
+        }
+
         sections.push("");
       } else {
         sections.push("## Sleep\n- No sleep data for this week\n");

@@ -33,11 +33,11 @@ scripts/
 └── validate-fixtures.ts  # Compare test fixtures against real Oura API
 ```
 
-## Current Tools (13 available)
+## Current Tools (14 available)
 
 **Sleep & Recovery:**
-- `get_sleep` - Detailed sleep sessions with stages, efficiency, HR, HRV
-- `get_daily_sleep` - Daily sleep scores with contributors
+- `get_sleep` - Complete sleep data: score + detailed sessions (stages, efficiency, HR, HRV)
+- `get_daily_sleep` - Daily sleep scores with contributors only (use `get_sleep` for full data)
 - `get_readiness` - Daily readiness scores and recovery metrics
 - `get_resilience` - Body's capacity to recover from stress
 
@@ -54,7 +54,20 @@ scripts/
 - `get_cardiovascular_age` - Estimated vascular age based on heart health
 
 **User Data:**
-- `get_tags` - User-created tags and notes for tracking lifestyle factors
+- `get_tags` - User-created tags and notes (simple format)
+- `get_enhanced_tags` - Rich tags with custom names, types, and time ranges
+
+## MCP Resources
+
+- **`oura://today`** - Today's health summary
+  - Fetches: `/daily_sleep`, `/sleep`, `/daily_readiness`, `/daily_activity`, `/daily_stress`
+  - Combines sleep score (from daily_sleep) with detailed session data (from sleep)
+  - Picks the main (longest) sleep session when multiple exist
+
+- **`oura://weekly-summary`** - Last 7 days summary with averages
+  - Fetches: `/daily_sleep`, `/sleep`, `/daily_readiness`, `/daily_activity`
+  - Shows score averages, best/worst days, sleep duration averages, HRV averages
+  - Groups sleep sessions by day, picks main session for duration calculations
 
 ## Notes
 
@@ -93,9 +106,9 @@ scripts/
 - [x] Set up Vitest with coverage thresholds (75/80/80/80)
 - [x] Create test infrastructure (fixtures, helpers directories)
 - [x] Write comprehensive tests for formatters (96%+ coverage achieved)
-- [x] Add tests for Oura client (mocked fetch) - 23 tests
-- [x] Add tests for tool handlers (mocked client) - 74 tests
-- [x] Add tests for MCP server (mocked SDK) - 8 tests
+- [x] Add tests for Oura client (mocked fetch)
+- [x] Add tests for tool handlers (mocked client)
+- [x] Add tests for MCP server (mocked SDK)
 - [x] Validate fixtures against real API (scripts/validate-fixtures.ts)
 - [x] Set up CI/CD for automated testing (GitHub Actions)
 - [x] Add pre-commit hooks for test validation (husky)
@@ -315,8 +328,15 @@ Then restart Claude Desktop.
 5. **Oura has TWO sleep endpoints** - IMPORTANT for resources/tools:
    - `/daily_sleep` → scores and contributors only (no duration, stages, HR, HRV)
    - `/sleep` → detailed session data (duration, stages, bedtime, HR, HRV, breathing)
-   - Resources like `oura://today` must call BOTH endpoints to show complete data
+   - Both `get_sleep` tool AND `oura://today` resource call BOTH endpoints to show complete data
    - The Oura app shows data from both endpoints combined
+6. **Oura API single-date query quirk** - Several endpoints return empty for `start == end`:
+   - **Affected endpoints**: `/sleep`, `/daily_activity`, `/workout`, `/session`, `/tag`, `/enhanced_tag`
+   - **NOT affected**: `/daily_sleep`, `/daily_readiness`, `/daily_stress`, `/daily_spo2`, `/heartrate`, etc.
+   - Example: `GET /sleep?start_date=2026-01-21&end_date=2026-01-21` → returns `[]`
+   - Example: `GET /sleep?start_date=2026-01-20&end_date=2026-01-22` → returns data for 01-21
+   - **Workaround**: Most methods expand by ±1 day; `client.getEnhancedTags()` needs ±3 days (worse bug)
+   - This matches how other Oura libraries work (always query ranges, filter client-side)
 
 ## Auth Strategy
 
