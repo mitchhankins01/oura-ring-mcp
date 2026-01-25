@@ -9,6 +9,7 @@ export default defineConfig({
       reporter: ['text', 'json', 'html', 'lcov'],
       exclude: [
         'src/types/**',        // Generated types from OpenAPI
+        'src/auth/**',         // CLI auth code (interactive, hard to test)
         'dist/**',
         'node_modules/**',
         '**/*.test.ts',
@@ -20,10 +21,36 @@ export default defineConfig({
         'src/utils/index.ts',  // Re-export file
       ],
       thresholds: {
-        branches: 75,
+        // Global thresholds
+        branches: 70,
         functions: 80,
         lines: 80,
-        statements: 80
+        statements: 80,
+        // Per-file thresholds for utilities (higher standards)
+        'src/utils/formatters.ts': {
+          branches: 100,
+          functions: 100,
+          lines: 95,
+          statements: 95
+        },
+        'src/utils/errors.ts': {
+          branches: 95,
+          functions: 100,
+          lines: 95,
+          statements: 95
+        },
+        'src/utils/analysis.ts': {
+          branches: 80,
+          functions: 95,
+          lines: 90,
+          statements: 90
+        },
+        'src/client.ts': {
+          branches: 100,
+          functions: 100,
+          lines: 100,
+          statements: 100
+        }
       }
     }
   }

@@ -84,6 +84,33 @@ vi.mock("./prompts/index.js", () => ({
   registerPrompts: mockRegisterPrompts,
 }));
 
+// Mock auth modules
+const mockLoadCredentials = vi.fn();
+const mockIsExpired = vi.fn();
+const mockGetOAuthConfigFromEnv = vi.fn();
+const mockRefreshAccessToken = vi.fn();
+
+vi.mock("./auth/store.js", () => ({
+  loadCredentials: mockLoadCredentials,
+  isExpired: mockIsExpired,
+}));
+
+vi.mock("./auth/oauth.js", () => ({
+  getOAuthConfigFromEnv: mockGetOAuthConfigFromEnv,
+  refreshAccessToken: mockRefreshAccessToken,
+}));
+
+// Mock CLI module (for CLI command tests)
+const mockRunAuthFlow = vi.fn();
+const mockRunLogout = vi.fn();
+const mockShowAuthStatus = vi.fn();
+
+vi.mock("./auth/cli.js", () => ({
+  runAuthFlow: mockRunAuthFlow,
+  runLogout: mockRunLogout,
+  showAuthStatus: mockShowAuthStatus,
+}));
+
 describe("MCP Server", () => {
   const originalEnv = process.env;
   const originalConsoleError = console.error;
@@ -99,6 +126,16 @@ describe("MCP Server", () => {
     mockRegisterTools.mockClear();
     mockRegisterResources.mockClear();
     mockRegisterPrompts.mockClear();
+    mockLoadCredentials.mockClear();
+    mockIsExpired.mockClear();
+    mockGetOAuthConfigFromEnv.mockClear();
+    mockRefreshAccessToken.mockClear();
+    mockRunAuthFlow.mockClear();
+    mockRunLogout.mockClear();
+    mockShowAuthStatus.mockClear();
+
+    // Default: no stored credentials
+    mockLoadCredentials.mockResolvedValue(null);
 
     // Reset environment - always set a token for these tests
     process.env = { ...originalEnv };
@@ -194,6 +231,55 @@ describe("MCP Server", () => {
 
       const serverInstance = MockMcpServer.instances[0];
       expect(serverInstance.connect).toHaveBeenCalled();
+    });
+  });
+
+  describe("stored credentials", () => {
+    it("should use stored credentials when no env token", async () => {
+      delete process.env.OURA_ACCESS_TOKEN;
+      delete process.env.OURA_PERSONAL_ACCESS_TOKEN;
+
+      mockLoadCredentials.mockResolvedValue({
+        access_token: "stored-token",
+        refresh_token: "refresh-token",
+        expires_at: Date.now() + 3600000,
+      });
+      mockIsExpired.mockReturnValue(false);
+
+      await import("./index.js");
+
+      expect(mockLoadCredentials).toHaveBeenCalled();
+      expect(MockOuraClient.lastConfig).toEqual({ accessToken: "stored-token" });
+    });
+
+    it("should refresh expired token", async () => {
+      delete process.env.OURA_ACCESS_TOKEN;
+      delete process.env.OURA_PERSONAL_ACCESS_TOKEN;
+
+      mockLoadCredentials.mockResolvedValue({
+        access_token: "expired-token",
+        refresh_token: "refresh-token",
+        expires_at: Date.now() - 1000,
+      });
+      mockIsExpired.mockReturnValue(true);
+      mockGetOAuthConfigFromEnv.mockReturnValue({
+        clientId: "test-client",
+        clientSecret: "test-secret",
+        redirectUri: "http://localhost:3000/callback",
+      });
+      mockRefreshAccessToken.mockResolvedValue({
+        access_token: "refreshed-token",
+        refresh_token: "new-refresh-token",
+        expires_at: Date.now() + 3600000,
+      });
+
+      await import("./index.js");
+
+      expect(mockRefreshAccessToken).toHaveBeenCalledWith(
+        "refresh-token",
+        expect.objectContaining({ clientId: "test-client" })
+      );
+      expect(MockOuraClient.lastConfig).toEqual({ accessToken: "refreshed-token" });
     });
   });
 });

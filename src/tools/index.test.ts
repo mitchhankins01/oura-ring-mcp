@@ -2294,6 +2294,205 @@ describe("Tool Handlers", () => {
   });
 
   // ─────────────────────────────────────────────────────────────
+  // analyze_adherence tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("analyze_adherence", () => {
+    it("should return adherence analysis with sufficient data", async () => {
+      const handler = mockServer.getToolHandler("analyze_adherence")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("Ring Adherence Analysis");
+    });
+
+    it("should handle no activity data", async () => {
+      mockClient = createMockClient({
+        getDailyActivity: vi.fn().mockResolvedValue(emptyResponse),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_adherence")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("No activity data found");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // analyze_temperature tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("analyze_temperature", () => {
+    it("should return temperature analysis with sufficient data", async () => {
+      // Create readiness data with temperature deviations
+      const readinessWithTemp = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${(i + 1).toString().padStart(2, "0")}`,
+          score: 80 + i,
+          temperature_deviation: (i - 5) * 0.1,
+          contributors: {
+            body_temperature: 80 + i,
+          },
+        })),
+      };
+      mockClient = createMockClient({
+        getDailyReadiness: vi.fn().mockResolvedValue(readinessWithTemp),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_temperature")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("Body Temperature Analysis");
+      expect(result.content[0].text).toContain("Overview");
+    });
+
+    it("should handle insufficient temperature data", async () => {
+      // Readiness data without temperature
+      const readinessNoTemp = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${(i + 1).toString().padStart(2, "0")}`,
+          score: 80,
+          temperature_deviation: null,
+        })),
+      };
+      mockClient = createMockClient({
+        getDailyReadiness: vi.fn().mockResolvedValue(readinessNoTemp),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_temperature")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("Need at least 5 days");
+    });
+
+    it("should show elevated days when temperature is high", async () => {
+      // Create data with elevated temperatures
+      const readinessElevated = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${(i + 1).toString().padStart(2, "0")}`,
+          score: 80,
+          temperature_deviation: i < 3 ? 0.7 : 0.1, // First 3 days elevated
+          contributors: { body_temperature: 70 },
+        })),
+      };
+      mockClient = createMockClient({
+        getDailyReadiness: vi.fn().mockResolvedValue(readinessElevated),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_temperature")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("Elevated Days");
+    });
+
+    it("should show 'and more days' when many elevated days", async () => {
+      // Create data with more than 5 elevated temperature days
+      const readinessManyElevated = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${(i + 1).toString().padStart(2, "0")}`,
+          score: 80,
+          temperature_deviation: 0.8, // All days elevated (>0.5)
+          contributors: { body_temperature: 70 },
+        })),
+      };
+      mockClient = createMockClient({
+        getDailyReadiness: vi.fn().mockResolvedValue(readinessManyElevated),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_temperature")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("and 5 more days");
+    });
+
+    it("should show temperature impact on readiness", async () => {
+      const readinessLowTemp = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${(i + 1).toString().padStart(2, "0")}`,
+          score: 60,
+          temperature_deviation: 0.2,
+          contributors: { body_temperature: 60 }, // Low contributor
+        })),
+      };
+      mockClient = createMockClient({
+        getDailyReadiness: vi.fn().mockResolvedValue(readinessLowTemp),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_temperature")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("negatively affecting");
+    });
+
+    it("should show trending up message", async () => {
+      // Temperature increasing over time
+      const readinessTrendingUp = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${(i + 1).toString().padStart(2, "0")}`,
+          score: 80,
+          temperature_deviation: i * 0.1, // 0.0, 0.1, 0.2, ...
+          contributors: { body_temperature: 80 },
+        })),
+      };
+      mockClient = createMockClient({
+        getDailyReadiness: vi.fn().mockResolvedValue(readinessTrendingUp),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_temperature")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("trending up");
+    });
+
+    it("should show trending down message", async () => {
+      // Temperature decreasing over time
+      const readinessTrendingDown = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${(i + 1).toString().padStart(2, "0")}`,
+          score: 80,
+          temperature_deviation: 1 - i * 0.1, // 1.0, 0.9, 0.8, ...
+          contributors: { body_temperature: 80 },
+        })),
+      };
+      mockClient = createMockClient({
+        getDailyReadiness: vi.fn().mockResolvedValue(readinessTrendingDown),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_temperature")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("trending down");
+    });
+
+    it("should show healthy range when contributor is good", async () => {
+      const readinessHealthy = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${(i + 1).toString().padStart(2, "0")}`,
+          score: 85,
+          temperature_deviation: 0.1,
+          contributors: { body_temperature: 85 }, // Good contributor
+        })),
+      };
+      mockClient = createMockClient({
+        getDailyReadiness: vi.fn().mockResolvedValue(readinessHealthy),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_temperature")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("within healthy range");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
   // get_heart_rate edge cases
   // ─────────────────────────────────────────────────────────────
 

@@ -283,11 +283,11 @@ OURA_ACCESS_TOKEN=your_token npx ts-node scripts/validate-fixtures.ts  # Compare
 **IMPORTANT:** After significant changes, publish to both npm AND MCP registry.
 
 ```bash
-# 1. Bump version
-npm version patch  # or minor/major
-
-# 2. Build, test, and verify coverage
+# 1. Build, test, and verify coverage
 pnpm build && pnpm test:coverage
+
+# 2. Bump version
+npm version patch  # or minor/major
 
 # 3. Publish to npm
 npm publish
