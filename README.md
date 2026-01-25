@@ -16,11 +16,7 @@ An MCP server that connects your Oura Ring to Claude and other AI assistants. Ge
 
 ## Quick Start
 
-### 1. Get your Oura token
-
-Go to [cloud.ouraring.com/personal-access-tokens](https://cloud.ouraring.com/personal-access-tokens) and create a token.
-
-### 2. Install
+### 1. Install
 
 ```bash
 git clone https://github.com/yourusername/oura-mcp.git
@@ -29,10 +25,41 @@ pnpm install
 pnpm build
 ```
 
+### 2. Authenticate with Oura
+
+**Option A: Personal Access Token (simpler)**
+
+1. Go to [cloud.ouraring.com/personal-access-tokens](https://cloud.ouraring.com/personal-access-tokens)
+2. Create a new token
+3. Set `OURA_ACCESS_TOKEN` in your environment or Claude Desktop config
+
+**Option B: OAuth CLI Flow (recommended for production)**
+
+1. Create an OAuth app at [developer.ouraring.com/applications](https://developer.ouraring.com/applications)
+   - Set Redirect URI to `http://localhost:3000/callback`
+   - Enable all scopes you need (Email, Personal, Daily, Heartrate, etc.)
+2. Set your credentials:
+   ```bash
+   export OURA_CLIENT_ID=your_client_id
+   export OURA_CLIENT_SECRET=your_client_secret
+   ```
+3. Run the auth flow:
+   ```bash
+   pnpm exec oura-ring-mcp auth
+   ```
+4. A browser will open for Oura authorization. After approving, credentials are saved to `~/.oura-mcp/credentials.json`
+
+**Managing OAuth credentials:**
+```bash
+pnpm exec oura-ring-mcp status   # Check authentication status
+pnpm exec oura-ring-mcp logout   # Clear stored credentials
+```
+
 ### 3. Configure Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%/Claude/claude_desktop_config.json` (Windows):
 
+**With Personal Access Token:**
 ```json
 {
   "mcpServers": {
@@ -47,7 +74,23 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-**Important**: Replace `/absolute/path/to/oura-mcp` with the actual path to your installation. This project requires Node >=24, so make sure Claude Desktop is using a modern Node version.
+**With OAuth (after running `auth` command):**
+```json
+{
+  "mcpServers": {
+    "oura": {
+      "command": "node",
+      "args": ["/absolute/path/to/oura-mcp/dist/index.js"],
+      "env": {
+        "OURA_CLIENT_ID": "your_client_id",
+        "OURA_CLIENT_SECRET": "your_client_secret"
+      }
+    }
+  }
+}
+```
+
+**Important**: Replace `/absolute/path/to/oura-mcp` with the actual path to your installation. This project requires Node >=24.
 
 Restart Claude Desktop.
 
@@ -253,8 +296,8 @@ See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and
 - [x] `quick-status` - Brief daily status check
 
 ### Phase 4a: Ship It (Local)
-- [ ] CLI auth flow: `npx oura-mcp auth` (for when PAT deprecated end of 2025)
-- [ ] Publish to npm as `@username/oura-mcp`
+- [x] CLI auth flow: `npx oura-ring-mcp auth` (for when PAT deprecated)
+- [ ] Publish to npm as `oura-ring-mcp`
 - [ ] Great README with demo gif, examples, screenshots
 - [ ] Add to MCP registry
 

@@ -21,7 +21,7 @@ src/
 ├── prompts/
 │   └── index.ts       # MCP prompt templates for common analysis tasks
 ├── auth/              # (Phase 4a) OAuth CLI flow
-│   ├── cli.ts         # `npx oura-mcp auth` command
+│   ├── cli.ts         # `npx oura-ring-mcp auth` command
 │   ├── oauth.ts       # OAuth2 flow helpers
 │   └── store.ts       # Token storage (~/.oura-mcp/credentials.json)
 ├── transports/        # (Phase 4b) Alternative transports
@@ -126,7 +126,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 ## Notes
 
 - When using cURL, load the token in .env
-- Oura PAT tokens deprecated end of 2025 → Phase 4a adds OAuth CLI flow
+- Oura PAT tokens deprecated soon → Phase 4a adds OAuth CLI flow
 - Data syncs when user opens Oura app - "no data" often means ring hasn't synced
 - Sleep data is attributed to the day you woke up, not when you fell asleep
 - Use Zod for API response validation—define schema once, get types with `z.infer<typeof schema>`
@@ -136,13 +136,16 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 
 See [README.md](README.md#roadmap) for the full roadmap with detailed checklists.
 
-**Current status:** Phase 3 (Make it Smart) complete. 27 tools, 7 resources, 7 prompts. All smart analysis tools done including adherence tracking, temperature analysis, streaks, and weekly report. HRV-specific features out of scope (API limitation: no R-R intervals).
+**Current status:** Phase 4a (Ship It - Local) complete. OAuth CLI auth working (`auth`, `logout`, `status` commands). 27 tools, 7 resources, 7 prompts. Ready for npm publish.
 
 ## Key Files
 
-- `src/index.ts` - MCP server setup and request routing
+- `src/index.ts` - MCP server entry point with CLI subcommand handling
 - `src/client.ts` - Oura API client with TypeScript types
 - `src/tools/index.ts` - Tool definitions (schemas) and handlers
+- `src/auth/cli.ts` - OAuth CLI flow (auth, logout, status commands)
+- `src/auth/oauth.ts` - OAuth2 helpers (authorization URL, token exchange, refresh)
+- `src/auth/store.ts` - Credential storage (~/.oura-mcp/credentials.json)
 - `src/utils/formatters.ts` - Convert seconds to hours, format scores, etc.
 - `src/utils/analysis.ts` - Statistical analysis utilities (Phase 3 foundation)
 - `scripts/validate-fixtures.ts` - Validate test fixtures against real Oura API
@@ -218,6 +221,11 @@ pnpm install          # Install dependencies
 pnpm build            # Compile TypeScript
 pnpm dev              # Watch mode
 pnpm start            # Run the server
+
+# Authentication (Phase 4a)
+npx oura-ring-mcp auth     # OAuth flow: opens browser, saves credentials
+npx oura-ring-mcp status   # Check authentication status
+npx oura-ring-mcp logout   # Clear stored credentials
 
 # Testing
 pnpm test             # Run all tests
@@ -343,15 +351,24 @@ Then restart Claude Desktop.
 
 ## Auth Strategy
 
-**Current (Phase 1-3):** PAT token via `OURA_ACCESS_TOKEN` env var
-
-**Phase 4a (CLI auth for local users):**
+**Option 1: Personal Access Token (simplest)**
 ```bash
-npx oura-mcp auth
-# Opens browser → Oura OAuth → callback to localhost:3000
-# Saves refresh token to ~/.oura-mcp/credentials.json
+export OURA_ACCESS_TOKEN=your_token_here
+# Get token at: https://cloud.ouraring.com/personal-access-tokens
 ```
-Server reads token from file, refreshes automatically. Still stdio transport.
+
+**Option 2: OAuth CLI Flow (Phase 4a - implemented)**
+
+First, create an OAuth app at https://cloud.ouraring.com/oauth/applications, then:
+```bash
+export OURA_CLIENT_ID=your_client_id
+export OURA_CLIENT_SECRET=your_client_secret
+
+npx oura-ring-mcp auth     # Opens browser → Oura OAuth → localhost callback
+npx oura-ring-mcp status   # Check authentication status
+npx oura-ring-mcp logout   # Clear stored credentials
+```
+Credentials saved to `~/.oura-mcp/credentials.json`. Server auto-refreshes expired tokens.
 
 **Phase 4b (Remote access):**
 - HTTP transport with SSE (Server-Sent Events)

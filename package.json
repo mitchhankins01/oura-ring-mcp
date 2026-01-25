@@ -1,12 +1,12 @@
 {
-  "name": "oura-mcp",
+  "name": "oura-ring-mcp",
   "version": "0.1.0",
   "description": "MCP server for Oura Ring data with smart analysis tools",
   "type": "module",
   "packageManager": "pnpm@10.15.1",
   "main": "dist/index.js",
   "bin": {
-    "oura-mcp": "dist/index.js"
+    "oura-ring-mcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
