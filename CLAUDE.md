@@ -355,3 +355,104 @@ Server reads token from file, refreshes automatically. Still stdio transport.
 - OAuth callback hosted on the server itself
 - Deploy to Railway/Fly/Render
 - Enables mobile access when Claude app supports MCP
+
+## Oura API Quirks & Bugs (For Oura Dev Team)
+
+This section documents issues discovered while building this MCP server that the Oura engineering team may want to address.
+
+### 1. Single-Date Query Bug (Critical)
+
+**Severity:** High - Forces all API consumers to implement workarounds
+
+**Affected endpoints:**
+- `/usercollection/sleep`
+- `/usercollection/daily_activity`
+- `/usercollection/workout`
+- `/usercollection/session`
+- `/usercollection/tag`
+- `/usercollection/enhanced_tag`
+
+**Issue:** When `start_date == end_date`, these endpoints return empty arrays even when data exists for that date.
+
+**Example:**
+```bash
+# Returns empty array despite data existing for 2026-01-21
+curl "https://api.ouraring.com/v2/usercollection/sleep?start_date=2026-01-21&end_date=2026-01-21"
+# Response: {"data": [], "next_token": null}
+
+# Returns data when range is expanded
+curl "https://api.ouraring.com/v2/usercollection/sleep?start_date=2026-01-20&end_date=2026-01-22"
+# Response: {"data": [{...data for 01-21...}], "next_token": null}
+```
+
+**Workaround:** Query with ±1 day range and filter results client-side.
+
+**Note:** The `/enhanced_tag` endpoint is worse - requires ±3 days to reliably return data.
+
+**NOT affected:** `/daily_sleep`, `/daily_readiness`, `/daily_stress`, `/daily_spo2`, `/heartrate`, `/vO2_max`, `/daily_resilience`, `/daily_cardiovascular_age`
+
+### 2. OpenAPI Spec Missing `sleep_regularity`
+
+**Severity:** Medium - Causes TypeScript type errors for API consumers
+
+**Issue:** The v2 API returns `sleep_regularity` in `ReadinessContributors`, but it's not documented in the OpenAPI spec (v1.27).
+
+**API Response:**
+```json
+{
+  "contributors": {
+    "activity_balance": 93,
+    "body_temperature": 100,
+    "hrv_balance": 89,
+    "previous_day_activity": 87,
+    "previous_night": 63,
+    "recovery_index": 100,
+    "resting_heart_rate": 94,
+    "sleep_balance": 97,
+    "sleep_regularity": 79  // ← Not in OpenAPI spec
+  }
+}
+```
+
+**Impact:** TypeScript consumers using generated types must cast to access this field:
+```typescript
+const sleepRegularity = (contributors as Record<string, unknown>).sleep_regularity;
+```
+
+**Fix:** Add `sleep_regularity` to the `ReadinessContributors` schema in the OpenAPI spec.
+
+### 3. Internal vs Public API Discrepancy
+
+**Severity:** Low - Informational
+
+**Issue:** The Oura Cloud dashboard (`cloud.ouraring.com/dashboard`) uses internal API endpoints that return additional fields not available in the public v2 API:
+
+| Field | Internal API | Public v2 API |
+|-------|--------------|---------------|
+| `average_breath_variation` | ✅ | ❌ |
+| `got_ups` | ✅ | ❌ |
+| `sleep_midpoint` | ✅ | ❌ |
+| `wake_ups` | ✅ | ❌ (only in some responses) |
+| Activity targets (`target_calories`, `target_meters`) | ✅ | ❌ |
+
+**Recommendation:** Consider exposing these fields in the public API for feature parity.
+
+### 4. Inconsistent Endpoint Naming
+
+**Severity:** Low - Cosmetic
+
+**Observations:**
+- `/vO2_max` uses camelCase with uppercase O (inconsistent with other endpoints)
+- Some endpoints use `daily_` prefix, others don't (e.g., `/sleep` vs `/daily_sleep`)
+- `/heartrate` is one word, but other metrics use underscores
+
+### 5. Documentation Issues
+
+**OpenAPI spec location:** The download link on https://cloud.ouraring.com/v2/docs is not versioned in the URL, making it hard to track spec changes.
+
+**Suggestion:** Include version in filename (e.g., `oura-api-v2-spec-1.27.json`) or provide a changelog.
+
+---
+
+*Last updated: 2026-01-25*
+*Tested against Oura API v2, OpenAPI spec v1.27*
