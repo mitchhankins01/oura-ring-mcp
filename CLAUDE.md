@@ -27,13 +27,14 @@ src/
 │   └── http.ts        # HTTP/SSE for remote access
 └── utils/
     ├── formatters.ts  # Human-readable formatting (seconds→hours, etc.)
-    └── errors.ts      # Custom error types and user-friendly messages
+    ├── errors.ts      # Custom error types and user-friendly messages
+    └── analysis.ts    # Statistical analysis (trends, outliers, correlation)
 
 scripts/
 └── validate-fixtures.ts  # Compare test fixtures against real Oura API
 ```
 
-## Current Tools (14 available)
+## Current Tools (17 available)
 
 **Sleep & Recovery:**
 - `get_sleep` - Complete sleep data: score + detailed sessions (stages, efficiency, HR, HRV)
@@ -57,6 +58,11 @@ scripts/
 - `get_tags` - User-created tags and notes (simple format)
 - `get_enhanced_tags` - Rich tags with custom names, types, and time ranges
 
+**Smart Analysis (Phase 3):**
+- `detect_anomalies` - Find unusual readings using IQR + Z-score outlier detection
+- `analyze_sleep_quality` - Comprehensive sleep analysis: trends, patterns, debt, regularity
+- `correlate_metrics` - Find correlations between any two metrics with p-value
+
 ## MCP Resources
 
 - **`oura://today`** - Today's health summary
@@ -68,6 +74,16 @@ scripts/
   - Fetches: `/daily_sleep`, `/sleep`, `/daily_readiness`, `/daily_activity`
   - Shows score averages, best/worst days, sleep duration averages, HRV averages
   - Groups sleep sessions by day, picks main session for duration calculations
+
+- **`oura://baseline`** - Personal 30-day averages and normal ranges
+  - Fetches: `/sleep`, `/daily_readiness`, `/daily_activity`
+  - Uses `dispersion()` for statistics and `detectOutliers()` for normal ranges
+  - Helps Claude understand what's "normal" for this user
+
+- **`oura://monthly-insights`** - Comprehensive 30-day analysis
+  - Fetches: `/sleep`, `/daily_readiness`, `/daily_activity`
+  - Uses analysis utilities: `sleepDebt()`, `sleepRegularity()`, `dayOfWeekAnalysis()`, `trend()`, `detectOutliers()`
+  - Generates actionable insights about patterns, anomalies, and trends
 
 ## Notes
 
@@ -89,8 +105,45 @@ See [README.md](README.md#roadmap) for the full roadmap with detailed checklists
 - `src/client.ts` - Oura API client with TypeScript types
 - `src/tools/index.ts` - Tool definitions (schemas) and handlers
 - `src/utils/formatters.ts` - Convert seconds to hours, format scores, etc.
+- `src/utils/analysis.ts` - Statistical analysis utilities (Phase 3 foundation)
 - `scripts/validate-fixtures.ts` - Validate test fixtures against real Oura API
 - `docs/RESEARCH.md` - **Competitive analysis, derived metrics formulas, Phase 3 inspiration**
+
+## Analysis Utilities (`src/utils/analysis.ts`)
+
+Phase 3 foundation for smart tools. All functions are pure, well-tested (49 tests), and inspired by the Wearipedia notebook.
+
+**Basic Statistics:**
+- `mean`, `standardDeviation`, `sampleStandardDeviation`, `quantile`, `min`, `max`
+
+**Rolling Averages:**
+- `rollingAverages(values)` → 7/14/30-day averages with counts
+- `rollingAverage(values, window)` → custom window
+
+**Trend Detection:**
+- `trend(values)` → slope, r-value, p-value, direction ("improving"/"declining"/"stable")
+
+**Outlier Detection:**
+- `detectOutliersIQR(values, multiplier?)` → IQR method (default 1.5x)
+- `detectOutliersZScore(values, threshold?)` → Z-score method (default ±2)
+- `detectOutliers(values)` → combined (flags only if both methods agree)
+
+**Correlation:**
+- `correlate(x, y)` → Pearson r, p-value, strength ("none"/"weak"/"moderate"/"strong")
+
+**Dispersion:**
+- `dispersion(values)` → mean, std, CV%, min, max, range, quartiles, IQR
+
+**Smoothing:**
+- `gaussianSmooth(values, sigma)` → Gaussian kernel smoothing
+- `movingAverage(values, window)` → simple moving average
+
+**Day-of-Week:**
+- `dayOfWeekAnalysis(data)` → averages by day, best/worst day, weekday vs weekend
+
+**Sleep-Specific:**
+- `sleepDebt(durations, targetHours?)` → debt hours and status
+- `sleepRegularity(bedtimes, waketimes)` → regularity score (0-100)
 
 ## Reference Materials
 

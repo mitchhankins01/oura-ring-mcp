@@ -83,6 +83,8 @@ Once connected, try asking Claude:
 
 ## Available Tools
 
+### Data Retrieval (14 tools)
+
 | Tool | Description |
 |------|-------------|
 | `get_sleep` | Complete sleep data with stages, efficiency, HR, HRV |
@@ -100,12 +102,22 @@ Once connected, try asking Claude:
 | `get_tags` | User-created tags and notes |
 | `get_enhanced_tags` | Rich tags with custom names and types |
 
+### Smart Analysis (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `detect_anomalies` | Find unusual readings using statistical outlier detection |
+| `analyze_sleep_quality` | Comprehensive sleep analysis with trends, patterns, debt |
+| `correlate_metrics` | Find correlations between any two health metrics |
+
 ## MCP Resources
 
 | Resource | Description |
 |----------|-------------|
 | `oura://today` | Today's health summary (sleep, readiness, activity, stress) |
 | `oura://weekly-summary` | Last 7 days summary with averages and trends |
+| `oura://baseline` | Your personal 30-day averages and normal ranges |
+| `oura://monthly-insights` | Comprehensive 30-day analysis with trends, patterns, anomalies |
 
 ## Development
 
@@ -174,17 +186,21 @@ This automatically scrapes the latest OpenAPI spec from Oura's docs and regenera
 
 See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and code examples.
 
-**Derived metrics to compute:**
+**Analysis utilities (`src/utils/analysis.ts`):**
+- [x] Rolling averages (7-day, 14-day, 30-day)
+- [x] Trend detection via linear regression slope
+- [x] Anomaly detection (IQR method + Z-score method)
+- [x] Sleep debt tracking (vs 8hr target)
+- [x] Sleep regularity score (consistency of bed/wake times)
+- [x] Day-of-week patterns ("I sleep worst on Fridays")
+- [x] Dispersion analysis (coefficient of variation)
+- [x] Correlation with p-value
+- [x] Gaussian smoothing for visualization
+
+**Derived metrics still TODO:**
 - [ ] Sleep stage ratios (deep/REM/light as % of total sleep)
-- [ ] Sleep debt tracking (vs 8hr target)
 - [ ] Sleep score formula (efficiency + deep% + REM%)
 - [ ] HRV recovery pattern (first half vs second half of night)
-- [ ] Rolling averages (7-day, 14-day, 30-day)
-- [ ] Trend detection via linear regression slope
-- [ ] Anomaly detection (IQR method + Z-score method)
-- [ ] Sleep regularity score (consistency of bed/wake times)
-- [ ] Day-of-week patterns ("I sleep worst on Fridays")
-- [ ] Dispersion analysis (coefficient of variation)
 
 **HRV-specific features:**
 - [ ] Time domain: SDNN, RMSSD, pNN50, CVSD
@@ -193,14 +209,13 @@ See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and
 - [ ] Preprocessing: ectopic beat removal (malik method)
 
 **Smart tools:**
-- [ ] `analyze_sleep_quality(days)` - Patterns and insights
+- [x] `detect_anomalies` - Flag unusual readings using IQR + Z-score
+- [x] `analyze_sleep_quality` - Comprehensive analysis with trends, patterns, debt
+- [x] `correlate_metrics` - Pearson correlation between any two metrics
 - [ ] `analyze_hrv_trend(days)` - Recovery trajectory
 - [ ] `compare_periods(period1, period2)` - This week vs last week
 - [ ] `compare_conditions(tag1, tag2, metric)` - Alcohol vs no alcohol
-- [ ] `detect_anomalies(days)` - Flag unusual readings (IQR + Z-score)
-- [ ] `correlate(metric1, metric2, days)` - Pearson correlation with p-value
 - [ ] `best_sleep_conditions()` - What predicts your good nights
-- [ ] `day_of_week_analysis(metric)` - Weekly patterns
 
 **Visualization-ready data (for Claude artifacts):**
 - [ ] Sleep stages stackplot data (Oura app style)

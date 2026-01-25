@@ -90,12 +90,13 @@ describe("Tool Handlers", () => {
   // ─────────────────────────────────────────────────────────────
 
   describe("registerTools", () => {
-    it("should register all 14 tools", () => {
-      expect(mockServer.getToolCount()).toBe(14);
+    it("should register all 17 tools", () => {
+      expect(mockServer.getToolCount()).toBe(17);
     });
 
     it("should register expected tool names", () => {
       const expectedTools = [
+        // Data retrieval tools
         "get_sleep",
         "get_readiness",
         "get_activity",
@@ -110,6 +111,10 @@ describe("Tool Handlers", () => {
         "get_tags",
         "get_enhanced_tags",
         "get_sessions",
+        // Smart analysis tools
+        "detect_anomalies",
+        "analyze_sleep_quality",
+        "correlate_metrics",
       ];
 
       expectedTools.forEach((toolName) => {
@@ -1118,6 +1123,253 @@ describe("Tool Handlers", () => {
       const result = await handler({});
 
       expect(result.content[0].text).toContain("Sessions API error");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // detect_anomalies tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("detect_anomalies", () => {
+    it("should detect HRV anomalies", async () => {
+      // Create data with an obvious outlier
+      const sleepDataWithOutlier = {
+        data: [
+          { day: "2024-01-01", average_hrv: 45, total_sleep_duration: 25200, type: "long_sleep" },
+          { day: "2024-01-02", average_hrv: 48, total_sleep_duration: 26100, type: "long_sleep" },
+          { day: "2024-01-03", average_hrv: 44, total_sleep_duration: 25500, type: "long_sleep" },
+          { day: "2024-01-04", average_hrv: 46, total_sleep_duration: 25800, type: "long_sleep" },
+          { day: "2024-01-05", average_hrv: 47, total_sleep_duration: 26400, type: "long_sleep" },
+          { day: "2024-01-06", average_hrv: 45, total_sleep_duration: 25200, type: "long_sleep" },
+          { day: "2024-01-07", average_hrv: 15, total_sleep_duration: 21600, type: "long_sleep" }, // outlier
+          { day: "2024-01-08", average_hrv: 46, total_sleep_duration: 25800, type: "long_sleep" },
+          { day: "2024-01-09", average_hrv: 48, total_sleep_duration: 26100, type: "long_sleep" },
+          { day: "2024-01-10", average_hrv: 44, total_sleep_duration: 25500, type: "long_sleep" },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepDataWithOutlier),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("detect_anomalies")!;
+      const result = await handler({ metric: "hrv", days: 30 });
+
+      expect(result.content[0].text).toContain("Anomaly Detection");
+      expect(result.content[0].text).toContain("unusual reading");
+      expect(result.content[0].text).toContain("HRV");
+    });
+
+    it("should handle insufficient data gracefully", async () => {
+      // With only 1 data point, detectOutliers returns no anomalies
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue({
+          data: [{ day: "2024-01-01", average_hrv: 45, type: "long_sleep" }],
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("detect_anomalies")!;
+      const result = await handler({ metric: "hrv" });
+
+      // With insufficient data, no anomalies are detected
+      expect(result.content[0].text).toContain("Anomaly Detection");
+    });
+
+    it("should detect readiness score anomalies", async () => {
+      const readinessDataWithOutlier = {
+        data: [
+          { day: "2024-01-01", score: 85 },
+          { day: "2024-01-02", score: 82 },
+          { day: "2024-01-03", score: 88 },
+          { day: "2024-01-04", score: 84 },
+          { day: "2024-01-05", score: 86 },
+          { day: "2024-01-06", score: 45 }, // outlier
+          { day: "2024-01-07", score: 83 },
+          { day: "2024-01-08", score: 85 },
+          { day: "2024-01-09", score: 87 },
+          { day: "2024-01-10", score: 84 },
+        ],
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getDailyReadiness: vi.fn().mockResolvedValue(readinessDataWithOutlier),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("detect_anomalies")!;
+      const result = await handler({ metric: "readiness" });
+
+      expect(result.content[0].text).toContain("Anomaly Detection");
+      expect(result.content[0].text).toContain("Readiness");
+    });
+
+    it("should handle API errors gracefully", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockRejectedValue(new Error("API error")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("detect_anomalies")!;
+      const result = await handler({ metric: "hrv" });
+
+      // When API fails, it returns "no anomalies" since there's no data
+      expect(result.content[0].text).toContain("Anomaly Detection");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // analyze_sleep_quality tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("analyze_sleep_quality", () => {
+    it("should analyze sleep quality with sufficient data", async () => {
+      const sleepData = {
+        data: Array.from({ length: 14 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          total_sleep_duration: 25200 + (i % 3) * 1800, // 7h to 8h
+          efficiency: 85 + (i % 5),
+          average_hrv: 40 + (i % 10),
+          deep_sleep_duration: 5400 + (i % 3) * 600,
+          rem_sleep_duration: 6000 + (i % 3) * 600,
+          bedtime_start: `2024-01-${String(i + 1).padStart(2, "0")}T22:30:00+00:00`,
+          bedtime_end: `2024-01-${String(i + 2).padStart(2, "0")}T06:30:00+00:00`,
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_sleep_quality")!;
+      const result = await handler({ days: 14 });
+
+      expect(result.content[0].text).toContain("Sleep Quality Analysis");
+      expect(result.content[0].text).toContain("Overview");
+      expect(result.content[0].text).toContain("sleep debt");
+    });
+
+    it("should handle insufficient data", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue({
+          data: [{ day: "2024-01-01", total_sleep_duration: 25200, type: "long_sleep" }],
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_sleep_quality")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("Need at least");
+      expect(result.content[0].text).toContain("nights");
+    });
+
+    it("should handle errors gracefully", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockRejectedValue(new Error("Sleep API error")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("analyze_sleep_quality")!;
+      const result = await handler({});
+
+      // When API fails, it returns insufficient data message (0 nights found)
+      expect(result.content[0].text).toContain("Need at least");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // correlate_metrics tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("correlate_metrics", () => {
+    it("should correlate HRV with sleep duration", async () => {
+      const sleepData = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          total_sleep_duration: 25200 + i * 1800, // increasing sleep
+          average_hrv: 40 + i * 2, // increasing HRV
+          type: "long_sleep" as const,
+        })),
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue(sleepData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("correlate_metrics")!;
+      const result = await handler({ metric1: "hrv", metric2: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("Correlation Analysis");
+      expect(result.content[0].text).toContain("HRV");
+      expect(result.content[0].text).toContain("Sleep Duration");
+    });
+
+    it("should correlate readiness with steps", async () => {
+      const readinessData = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          score: 80 + i,
+        })),
+        next_token: null,
+      };
+      const activityData = {
+        data: Array.from({ length: 10 }, (_, i) => ({
+          day: `2024-01-${String(i + 1).padStart(2, "0")}`,
+          steps: 8000 + i * 500,
+        })),
+        next_token: null,
+      };
+
+      mockClient = createMockClient({
+        getDailyReadiness: vi.fn().mockResolvedValue(readinessData),
+        getDailyActivity: vi.fn().mockResolvedValue(activityData),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("correlate_metrics")!;
+      const result = await handler({ metric1: "readiness", metric2: "steps" });
+
+      expect(result.content[0].text).toContain("Correlation Analysis");
+    });
+
+    it("should handle insufficient data", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockResolvedValue({
+          data: [{ day: "2024-01-01", average_hrv: 45, total_sleep_duration: 25200, type: "long_sleep" }],
+          next_token: null,
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("correlate_metrics")!;
+      const result = await handler({ metric1: "hrv", metric2: "sleep_duration" });
+
+      expect(result.content[0].text).toContain("Need at least");
+      expect(result.content[0].text).toContain("days");
+    });
+
+    it("should handle errors gracefully", async () => {
+      mockClient = createMockClient({
+        getSleep: vi.fn().mockRejectedValue(new Error("Correlation API error")),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("correlate_metrics")!;
+      const result = await handler({ metric1: "hrv", metric2: "sleep_duration" });
+
+      // When API fails, it returns insufficient data message (0 days found)
+      expect(result.content[0].text).toContain("Need at least");
     });
   });
 

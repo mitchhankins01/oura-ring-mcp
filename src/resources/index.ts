@@ -6,7 +6,7 @@
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { OuraClient } from "../client.js";
+import type { OuraClient, SleepSession, DailyReadiness, DailyActivity } from "../client.js";
 import {
   formatDuration,
   formatScore,
@@ -15,6 +15,14 @@ import {
   getDaysAgo,
   percentage,
 } from "../utils/formatters.js";
+import {
+  dispersion,
+  trend,
+  detectOutliers,
+  dayOfWeekAnalysis,
+  sleepDebt,
+  sleepRegularity,
+} from "../utils/analysis.js";
 
 /**
  * Register all MCP resources with the server
@@ -333,6 +341,335 @@ export function registerResources(server: McpServer, client: OuraClient): void {
         contents: [
           {
             uri: "oura://weekly-summary",
+            mimeType: "text/plain",
+            text: sections.join("\n"),
+          },
+        ],
+      };
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // oura://baseline - Personal averages and normal ranges (30 days)
+  // ─────────────────────────────────────────────────────────────
+
+  server.registerResource(
+    "baseline",
+    "oura://baseline",
+    {
+      description: "Your personal health baseline: 30-day averages and normal ranges for sleep, HRV, heart rate, and activity. Use this to understand what's normal for you.",
+      mimeType: "text/plain",
+    },
+    async () => {
+      const today = getToday();
+      const monthAgo = getDaysAgo(30);
+      const sections: string[] = [];
+
+      sections.push(`# Your Personal Baseline (30 days)\n`);
+      sections.push(`*Based on data from ${monthAgo} to ${today}*\n`);
+
+      // Fetch all data in parallel
+      const [sleepResult, readinessResult, activityResult] = await Promise.allSettled([
+        client.getSleep(monthAgo, today),
+        client.getDailyReadiness(monthAgo, today),
+        client.getDailyActivity(monthAgo, today),
+      ]);
+
+      // Filter to only main sleep sessions (exclude naps, rest periods)
+      const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
+      const sessions: SleepSession[] = allSleep.filter((s) => s.type === "long_sleep");
+      const readinessData: DailyReadiness[] = readinessResult.status === "fulfilled" ? readinessResult.value.data : [];
+      const activityData: DailyActivity[] = activityResult.status === "fulfilled" ? activityResult.value.data : [];
+
+      // Sleep baseline
+      if (sessions.length >= 5) {
+        const durations = sessions.map((s) => s.total_sleep_duration ?? 0).filter((d) => d > 0);
+        const hrvValues = sessions.map((s) => s.average_hrv).filter((h): h is number => h != null);
+        const hrValues = sessions.map((s) => s.lowest_heart_rate).filter((h): h is number => h != null);
+        const deepDurations = sessions.map((s) => s.deep_sleep_duration ?? 0);
+        const efficiencies = sessions.map((s) => s.efficiency).filter((e): e is number => e != null);
+
+        sections.push("## Sleep");
+        sections.push(`- Nights analyzed: ${sessions.length}`);
+
+        if (durations.length > 0) {
+          const durationStats = dispersion(durations);
+          sections.push(`- **Duration:** ${formatDuration(durationStats.mean)} avg (range: ${formatDuration(durationStats.min)} - ${formatDuration(durationStats.max)})`);
+        }
+
+        if (efficiencies.length > 0) {
+          const effStats = dispersion(efficiencies);
+          sections.push(`- **Efficiency:** ${Math.round(effStats.mean)}% avg (range: ${Math.round(effStats.min)}% - ${Math.round(effStats.max)}%)`);
+        }
+
+        if (deepDurations.length > 0) {
+          const deepStats = dispersion(deepDurations);
+          sections.push(`- **Deep Sleep:** ${formatDuration(deepStats.mean)} avg`);
+        }
+
+        if (hrvValues.length > 0) {
+          const hrvStats = dispersion(hrvValues);
+          const hrvOutliers = detectOutliers(hrvValues);
+          sections.push(`- **HRV:** ${Math.round(hrvStats.mean)} ms avg (normal range: ${Math.round(hrvOutliers.lowerBound)}-${Math.round(hrvOutliers.upperBound)} ms)`);
+        }
+
+        if (hrValues.length > 0) {
+          const hrStats = dispersion(hrValues);
+          sections.push(`- **Resting HR:** ${Math.round(hrStats.mean)} bpm avg (range: ${Math.round(hrStats.min)}-${Math.round(hrStats.max)} bpm)`);
+        }
+
+        sections.push("");
+      } else {
+        sections.push("## Sleep\n- Insufficient data (need at least 5 nights)\n");
+      }
+
+      // Readiness baseline
+      if (readinessData.length >= 5) {
+        const scores = readinessData.map((r) => r.score).filter((s): s is number => s != null);
+
+        if (scores.length > 0) {
+          const scoreStats = dispersion(scores);
+          const scoreOutliers = detectOutliers(scores);
+
+          sections.push("## Readiness");
+          sections.push(`- Days analyzed: ${readinessData.length}`);
+          sections.push(`- **Score:** ${Math.round(scoreStats.mean)} avg (normal range: ${Math.round(scoreOutliers.lowerBound)}-${Math.round(scoreOutliers.upperBound)})`);
+          sections.push("");
+        }
+      } else {
+        sections.push("## Readiness\n- Insufficient data (need at least 5 days)\n");
+      }
+
+      // Activity baseline
+      if (activityData.length >= 5) {
+        const scores = activityData.map((a) => a.score).filter((s): s is number => s != null);
+        const steps = activityData.map((a) => a.steps).filter((s): s is number => s != null);
+        const calories = activityData.map((a) => a.active_calories).filter((c): c is number => c != null);
+
+        sections.push("## Activity");
+        sections.push(`- Days analyzed: ${activityData.length}`);
+
+        if (scores.length > 0) {
+          const scoreStats = dispersion(scores);
+          sections.push(`- **Score:** ${Math.round(scoreStats.mean)} avg`);
+        }
+
+        if (steps.length > 0) {
+          const stepStats = dispersion(steps);
+          sections.push(`- **Steps:** ${Math.round(stepStats.mean).toLocaleString()} avg/day (range: ${Math.round(stepStats.min).toLocaleString()}-${Math.round(stepStats.max).toLocaleString()})`);
+        }
+
+        if (calories.length > 0) {
+          const calStats = dispersion(calories);
+          sections.push(`- **Active Calories:** ${Math.round(calStats.mean)} avg/day`);
+        }
+
+        sections.push("");
+      } else {
+        sections.push("## Activity\n- Insufficient data (need at least 5 days)\n");
+      }
+
+      sections.push("---");
+      sections.push("*Use these baselines to interpret your daily data. Values outside normal ranges may indicate something worth investigating.*");
+
+      return {
+        contents: [
+          {
+            uri: "oura://baseline",
+            mimeType: "text/plain",
+            text: sections.join("\n"),
+          },
+        ],
+      };
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // oura://monthly-insights - 30-day comprehensive analysis
+  // ─────────────────────────────────────────────────────────────
+
+  server.registerResource(
+    "monthly-insights",
+    "oura://monthly-insights",
+    {
+      description: "Comprehensive 30-day health insights including trends, patterns, anomalies, and actionable observations about your sleep, recovery, and activity.",
+      mimeType: "text/plain",
+    },
+    async () => {
+      const today = getToday();
+      const monthAgo = getDaysAgo(30);
+      const sections: string[] = [];
+
+      sections.push(`# Monthly Health Insights\n`);
+      sections.push(`*Analysis period: ${monthAgo} to ${today}*\n`);
+
+      // Fetch all data in parallel
+      const [sleepResult, readinessResult, activityResult] = await Promise.allSettled([
+        client.getSleep(monthAgo, today),
+        client.getDailyReadiness(monthAgo, today),
+        client.getDailyActivity(monthAgo, today),
+      ]);
+
+      // Filter to only main sleep sessions (exclude naps, rest periods)
+      const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
+      const sessions: SleepSession[] = allSleep.filter((s) => s.type === "long_sleep");
+      const readinessData: DailyReadiness[] = readinessResult.status === "fulfilled" ? readinessResult.value.data : [];
+      const activityData: DailyActivity[] = activityResult.status === "fulfilled" ? activityResult.value.data : [];
+
+      // ═══════════════════════════════════════════════════════════
+      // SLEEP INSIGHTS
+      // ═══════════════════════════════════════════════════════════
+      if (sessions.length >= 7) {
+        sections.push("## 💤 Sleep Insights");
+
+        const durations = sessions.map((s) => s.total_sleep_duration ?? 0).filter((d) => d > 0);
+        const hrvValues = sessions.map((s) => s.average_hrv).filter((h): h is number => h != null);
+
+        // Sleep debt
+        const debt = sleepDebt(durations, 8);
+        if (debt.status === "significant_debt") {
+          sections.push(`⚠️ **Sleep Debt Alert:** You're averaging ${(debt.actualHours).toFixed(1)}h/night, ${debt.debtHours.toFixed(1)}h short of the 8h target.`);
+        } else if (debt.status === "surplus") {
+          sections.push(`✓ **Sleep Surplus:** Averaging ${(debt.actualHours).toFixed(1)}h/night - exceeding 8h target.`);
+        } else {
+          sections.push(`✓ **On Target:** Averaging ${(debt.actualHours).toFixed(1)}h/night.`);
+        }
+
+        // Sleep regularity
+        const bedtimes = sessions.map((s) => s.bedtime_start);
+        const waketimes = sessions.map((s) => s.bedtime_end);
+        const regularity = sleepRegularity(bedtimes, waketimes);
+        if (regularity.regularityScore < 50) {
+          sections.push(`⚠️ **Irregular Schedule:** Your bedtime varies significantly (regularity: ${Math.round(regularity.regularityScore)}/100). Consistent sleep times improve sleep quality.`);
+        } else if (regularity.regularityScore >= 80) {
+          sections.push(`✓ **Consistent Schedule:** Excellent sleep regularity (${Math.round(regularity.regularityScore)}/100).`);
+        }
+
+        // Day of week patterns
+        const dowData = sessions.map((s) => ({
+          date: s.day,
+          value: (s.total_sleep_duration ?? 0) / 3600,
+        }));
+        const dowAnalysis = dayOfWeekAnalysis(dowData);
+        const weekdayWeekendDiff = dowAnalysis.weekendAverage - dowAnalysis.weekdayAverage;
+        if (Math.abs(weekdayWeekendDiff) > 1) {
+          if (weekdayWeekendDiff > 0) {
+            sections.push(`📊 **Weekend Pattern:** You sleep ${weekdayWeekendDiff.toFixed(1)}h more on weekends (${dowAnalysis.weekendAverage.toFixed(1)}h) than weekdays (${dowAnalysis.weekdayAverage.toFixed(1)}h).`);
+          } else {
+            sections.push(`📊 **Weekday Pattern:** You sleep ${Math.abs(weekdayWeekendDiff).toFixed(1)}h more on weekdays than weekends.`);
+          }
+        }
+        sections.push(`📅 **Best Night:** ${dowAnalysis.bestDay.day} (${dowAnalysis.bestDay.average.toFixed(1)}h avg) | **Worst:** ${dowAnalysis.worstDay.day} (${dowAnalysis.worstDay.average.toFixed(1)}h avg)`);
+
+        // HRV trend
+        if (hrvValues.length >= 7) {
+          const hrvTrend = trend(hrvValues);
+          if (hrvTrend.significant && hrvTrend.direction === "improving") {
+            sections.push(`📈 **HRV Improving:** Your heart rate variability shows a positive trend - a sign of good recovery.`);
+          } else if (hrvTrend.significant && hrvTrend.direction === "declining") {
+            sections.push(`📉 **HRV Declining:** Your heart rate variability is trending down - consider more recovery time.`);
+          }
+        }
+
+        // Anomalies
+        if (hrvValues.length >= 10) {
+          const hrvOutliers = detectOutliers(hrvValues);
+          if (hrvOutliers.outliers.length > 0) {
+            const lowOutliers = hrvOutliers.outliers.filter((o) => o.value < hrvOutliers.lowerBound);
+            if (lowOutliers.length > 0) {
+              sections.push(`🔍 **${lowOutliers.length} night(s) with unusually low HRV** - may indicate stress, illness, or poor recovery.`);
+            }
+          }
+        }
+
+        sections.push("");
+      } else {
+        sections.push("## 💤 Sleep Insights\n- Need at least 7 nights of data for insights.\n");
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // READINESS INSIGHTS
+      // ═══════════════════════════════════════════════════════════
+      if (readinessData.length >= 7) {
+        sections.push("## 🔋 Readiness Insights");
+
+        const scores = readinessData.map((r) => r.score).filter((s): s is number => s != null);
+
+        if (scores.length >= 7) {
+          const scoreStats = dispersion(scores);
+          const scoreTrend = trend(scores);
+
+          sections.push(`📊 **Average Readiness:** ${Math.round(scoreStats.mean)} (range: ${Math.round(scoreStats.min)}-${Math.round(scoreStats.max)})`);
+
+          if (scoreTrend.significant) {
+            if (scoreTrend.direction === "improving") {
+              sections.push(`📈 **Trend:** Readiness is improving over the past month.`);
+            } else if (scoreTrend.direction === "declining") {
+              sections.push(`📉 **Trend:** Readiness is declining - you may need more rest.`);
+            }
+          }
+
+          // Low readiness days
+          const lowDays = readinessData.filter((r) => r.score != null && r.score < 60);
+          if (lowDays.length >= 5) {
+            sections.push(`⚠️ **${lowDays.length} days with low readiness** (<60) this month.`);
+          }
+        }
+
+        sections.push("");
+      } else {
+        sections.push("## 🔋 Readiness Insights\n- Need at least 7 days of data for insights.\n");
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // ACTIVITY INSIGHTS
+      // ═══════════════════════════════════════════════════════════
+      if (activityData.length >= 7) {
+        sections.push("## 🏃 Activity Insights");
+
+        const steps = activityData.map((a) => a.steps).filter((s): s is number => s != null);
+
+        if (steps.length >= 7) {
+          const stepStats = dispersion(steps);
+          const stepTrend = trend(steps);
+
+          sections.push(`📊 **Average Steps:** ${Math.round(stepStats.mean).toLocaleString()}/day`);
+
+          // Goal achievement (assuming 10k steps goal)
+          const daysOver10k = steps.filter((s) => s >= 10000).length;
+          const pctOver10k = Math.round((daysOver10k / steps.length) * 100);
+          sections.push(`🎯 **10k Goal:** Achieved ${daysOver10k} of ${steps.length} days (${pctOver10k}%)`);
+
+          // Day of week patterns for steps
+          const stepDowData = activityData
+            .filter((a) => a.steps != null)
+            .map((a) => ({ date: a.day, value: a.steps! }));
+          if (stepDowData.length >= 7) {
+            const stepDow = dayOfWeekAnalysis(stepDowData);
+            sections.push(`📅 **Most Active:** ${stepDow.bestDay.day} (${Math.round(stepDow.bestDay.average).toLocaleString()} steps)`);
+            sections.push(`📅 **Least Active:** ${stepDow.worstDay.day} (${Math.round(stepDow.worstDay.average).toLocaleString()} steps)`);
+          }
+
+          if (stepTrend.significant && stepTrend.direction === "declining") {
+            sections.push(`📉 **Trend:** Activity levels are declining this month.`);
+          }
+        }
+
+        sections.push("");
+      } else {
+        sections.push("## 🏃 Activity Insights\n- Need at least 7 days of data for insights.\n");
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // SUMMARY
+      // ═══════════════════════════════════════════════════════════
+      sections.push("---");
+      sections.push("*These insights are based on your personal data patterns. Significant changes may warrant discussion with a healthcare provider.*");
+
+      return {
+        contents: [
+          {
+            uri: "oura://monthly-insights",
             mimeType: "text/plain",
             text: sections.join("\n"),
           },

@@ -22,15 +22,28 @@ import {
   Tag,
   EnhancedTag,
   Session,
+  DailyReadiness,
+  DailyActivity,
 } from "../client.js";
 import {
   formatDuration,
   formatTime,
   formatScore,
   getToday,
+  getDaysAgo,
   percentage,
   formatError,
   getNoDataMessage,
+  // Analysis utilities
+  mean,
+  trend,
+  detectOutliers,
+  dispersion,
+  rollingAverages,
+  dayOfWeekAnalysis,
+  sleepDebt,
+  sleepRegularity,
+  correlate,
 } from "../utils/index.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -854,6 +867,493 @@ export function registerTools(server: McpServer, client: OuraClient) {
               text: formatError(error),
             },
           ],
+        };
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════
+  // SMART TOOLS (Phase 3)
+  // ═══════════════════════════════════════════════════════════════
+
+  // ─────────────────────────────────────────────────────────────
+  // detect_anomalies tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "detect_anomalies",
+    {
+      description:
+        "Detect unusual readings in your health data over a time period. Uses statistical methods (IQR and Z-score) to flag outliers in sleep, HRV, heart rate, and activity. Useful for identifying nights with unusually poor sleep, stress spikes, or other anomalies.",
+      inputSchema: {
+        days: z.number().optional().describe("Number of days to analyze (default: 30)"),
+        metrics: z
+          .array(z.enum(["sleep_score", "hrv", "heart_rate", "deep_sleep", "efficiency", "readiness", "activity"]))
+          .optional()
+          .describe("Which metrics to check for anomalies (default: all)"),
+      },
+    },
+    async ({ days = 30, metrics }) => {
+      try {
+        const endDate = getToday();
+        const startDate = getDaysAgo(days);
+
+        // Fetch data in parallel
+        const [sleepResult, readinessResult, activityResult] = await Promise.allSettled([
+          client.getSleep(startDate, endDate),
+          client.getDailyReadiness(startDate, endDate),
+          client.getDailyActivity(startDate, endDate),
+        ]);
+
+        // Filter to only main sleep sessions (exclude naps, rest periods)
+        const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
+        const sleepSessions: SleepSession[] = allSleep.filter((s) => s.type === "long_sleep");
+        const readinessData: DailyReadiness[] = readinessResult.status === "fulfilled" ? readinessResult.value.data : [];
+        const activityData: DailyActivity[] = activityResult.status === "fulfilled" ? activityResult.value.data : [];
+
+        if (sleepSessions.length === 0 && readinessData.length === 0 && activityData.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: `No data found for the past ${days} days.` }],
+          };
+        }
+
+        const allMetrics = ["sleep_score", "hrv", "heart_rate", "deep_sleep", "efficiency", "readiness", "activity"];
+        const metricsToCheck = metrics || allMetrics;
+        const anomalies: Array<{ metric: string; date: string; value: number; expected: string }> = [];
+
+        // Extract and check each metric
+        if (metricsToCheck.includes("hrv") && sleepSessions.length >= 5) {
+          const hrvData = sleepSessions
+            .filter((s) => s.average_hrv != null)
+            .map((s) => ({ day: s.day, value: s.average_hrv! }));
+          const hrvValues = hrvData.map((d) => d.value);
+          const hrvOutliers = detectOutliers(hrvValues);
+          hrvOutliers.outliers.forEach((o) => {
+            const dataPoint = hrvData[o.index];
+            anomalies.push({
+              metric: "HRV",
+              date: dataPoint.day,
+              value: Math.round(o.value),
+              expected: `${Math.round(hrvOutliers.lowerBound)}-${Math.round(hrvOutliers.upperBound)} ms`,
+            });
+          });
+        }
+
+        if (metricsToCheck.includes("heart_rate") && sleepSessions.length >= 5) {
+          const hrData = sleepSessions
+            .filter((s) => s.average_heart_rate != null)
+            .map((s) => ({ day: s.day, value: s.average_heart_rate! }));
+          const hrValues = hrData.map((d) => d.value);
+          const hrOutliers = detectOutliers(hrValues);
+          hrOutliers.outliers.forEach((o) => {
+            const dataPoint = hrData[o.index];
+            anomalies.push({
+              metric: "Resting HR",
+              date: dataPoint.day,
+              value: Math.round(o.value),
+              expected: `${Math.round(hrOutliers.lowerBound)}-${Math.round(hrOutliers.upperBound)} bpm`,
+            });
+          });
+        }
+
+        if (metricsToCheck.includes("deep_sleep") && sleepSessions.length >= 5) {
+          const deepData = sleepSessions
+            .filter((s) => s.deep_sleep_duration != null)
+            .map((s) => ({ day: s.day, value: s.deep_sleep_duration! / 3600 })); // Convert to hours
+          const deepValues = deepData.map((d) => d.value);
+          const deepOutliers = detectOutliers(deepValues);
+          deepOutliers.outliers.forEach((o) => {
+            const dataPoint = deepData[o.index];
+            anomalies.push({
+              metric: "Deep Sleep",
+              date: dataPoint.day,
+              value: Math.round(o.value * 10) / 10,
+              expected: `${(deepOutliers.lowerBound).toFixed(1)}-${(deepOutliers.upperBound).toFixed(1)} hours`,
+            });
+          });
+        }
+
+        if (metricsToCheck.includes("efficiency") && sleepSessions.length >= 5) {
+          const effData = sleepSessions
+            .filter((s) => s.efficiency != null)
+            .map((s) => ({ day: s.day, value: s.efficiency! }));
+          const effValues = effData.map((d) => d.value);
+          const effOutliers = detectOutliers(effValues);
+          effOutliers.outliers.forEach((o) => {
+            const dataPoint = effData[o.index];
+            anomalies.push({
+              metric: "Sleep Efficiency",
+              date: dataPoint.day,
+              value: Math.round(o.value),
+              expected: `${Math.round(effOutliers.lowerBound)}-${Math.round(effOutliers.upperBound)}%`,
+            });
+          });
+        }
+
+        if (metricsToCheck.includes("readiness") && readinessData.length >= 5) {
+          const readData = readinessData
+            .filter((r) => r.score != null)
+            .map((r) => ({ day: r.day, value: r.score! }));
+          const readValues = readData.map((d) => d.value);
+          const readOutliers = detectOutliers(readValues);
+          readOutliers.outliers.forEach((o) => {
+            const dataPoint = readData[o.index];
+            anomalies.push({
+              metric: "Readiness Score",
+              date: dataPoint.day,
+              value: Math.round(o.value),
+              expected: `${Math.round(readOutliers.lowerBound)}-${Math.round(readOutliers.upperBound)}`,
+            });
+          });
+        }
+
+        if (metricsToCheck.includes("activity") && activityData.length >= 5) {
+          const actData = activityData
+            .filter((a) => a.score != null)
+            .map((a) => ({ day: a.day, value: a.score! }));
+          const actValues = actData.map((d) => d.value);
+          const actOutliers = detectOutliers(actValues);
+          actOutliers.outliers.forEach((o) => {
+            const dataPoint = actData[o.index];
+            anomalies.push({
+              metric: "Activity Score",
+              date: dataPoint.day,
+              value: Math.round(o.value),
+              expected: `${Math.round(actOutliers.lowerBound)}-${Math.round(actOutliers.upperBound)}`,
+            });
+          });
+        }
+
+        // Sort anomalies by date (most recent first)
+        anomalies.sort((a, b) => b.date.localeCompare(a.date));
+
+        if (anomalies.length === 0) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `## Anomaly Detection (${days} days)\n\n✓ No anomalies detected. All metrics are within normal ranges for your baseline.`,
+              },
+            ],
+          };
+        }
+
+        const lines = [
+          `## Anomaly Detection (${days} days)`,
+          "",
+          `Found ${anomalies.length} unusual reading${anomalies.length > 1 ? "s" : ""}:`,
+          "",
+        ];
+
+        anomalies.forEach((a) => {
+          const isLow = a.value < parseFloat(a.expected.split("-")[0]);
+          const arrow = isLow ? "↓" : "↑";
+          lines.push(`- **${a.date}** - ${a.metric}: ${a.value} ${arrow} (expected: ${a.expected})`);
+        });
+
+        lines.push("");
+        lines.push("*Anomalies are flagged when values fall outside both IQR and Z-score bounds.*");
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // analyze_sleep_quality tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "analyze_sleep_quality",
+    {
+      description:
+        "Comprehensive sleep quality analysis over a time period. Shows trends, patterns by day of week, sleep debt, regularity score, and identifies your best/worst sleep days. Great for understanding what affects your sleep.",
+      inputSchema: {
+        days: z.number().optional().describe("Number of days to analyze (default: 30)"),
+      },
+    },
+    async ({ days = 30 }) => {
+      try {
+        const endDate = getToday();
+        const startDate = getDaysAgo(days);
+
+        const [sleepResult, scoresResult] = await Promise.allSettled([
+          client.getSleep(startDate, endDate),
+          client.getDailySleep(startDate, endDate),
+        ]);
+
+        // Filter to only main sleep sessions (exclude naps, rest periods)
+        const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
+        const sessions = allSleep.filter((s) => s.type === "long_sleep");
+        const scores = scoresResult.status === "fulfilled" ? scoresResult.value.data : [];
+
+        if (sessions.length < 3) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Need at least 3 nights of sleep data for analysis. Found ${sessions.length} night(s) in the past ${days} days.`,
+              },
+            ],
+          };
+        }
+
+        const lines = [`## Sleep Quality Analysis (${days} days)`, ""];
+
+        // Overall stats
+        const durations = sessions.map((s) => s.total_sleep_duration ?? 0);
+        const hrvValues = sessions.filter((s) => s.average_hrv != null).map((s) => s.average_hrv!);
+        const efficiencies = sessions.filter((s) => s.efficiency != null).map((s) => s.efficiency!);
+
+        const avgDuration = mean(durations);
+        const avgHrv = hrvValues.length > 0 ? mean(hrvValues) : null;
+        const avgEfficiency = efficiencies.length > 0 ? mean(efficiencies) : null;
+
+        lines.push("### Overview");
+        lines.push(`- **Nights analyzed:** ${sessions.length}`);
+        lines.push(`- **Avg sleep:** ${formatDuration(avgDuration)}`);
+        if (avgEfficiency) lines.push(`- **Avg efficiency:** ${Math.round(avgEfficiency)}%`);
+        if (avgHrv) lines.push(`- **Avg HRV:** ${Math.round(avgHrv)} ms`);
+
+        // Sleep debt
+        const debt = sleepDebt(durations, 8);
+        lines.push("");
+        if (debt.status === "surplus") {
+          lines.push(`✓ **Sleep surplus:** Getting ${Math.abs(debt.debtHours).toFixed(1)}h more than 8h target`);
+        } else if (debt.status === "balanced") {
+          lines.push(`✓ **On target:** Meeting 8h sleep goal`);
+        } else if (debt.status === "mild_debt") {
+          lines.push(`⚠ **Mild sleep debt:** ${debt.debtHours.toFixed(1)}h short of 8h target`);
+        } else {
+          lines.push(`⚠ **Significant sleep debt:** ${debt.debtHours.toFixed(1)}h short of 8h target`);
+        }
+
+        // Sleep regularity
+        const bedtimes = sessions.map((s) => s.bedtime_start);
+        const waketimes = sessions.map((s) => s.bedtime_end);
+        const regularity = sleepRegularity(bedtimes, waketimes);
+        lines.push(`- **Regularity score:** ${Math.round(regularity.regularityScore)}/100 (${regularity.status.replace(/_/g, " ")})`);
+
+        // Trend analysis
+        if (scores.length >= 5) {
+          const scoreValues = scores.map((s) => s.score ?? 0);
+          const scoreTrend = trend(scoreValues);
+          lines.push("");
+          lines.push("### Trend");
+          if (scoreTrend.direction === "improving") {
+            lines.push(`↑ Sleep scores are **improving** (${scoreTrend.significant ? "statistically significant" : "not yet significant"})`);
+          } else if (scoreTrend.direction === "declining") {
+            lines.push(`↓ Sleep scores are **declining** (${scoreTrend.significant ? "statistically significant" : "not yet significant"})`);
+          } else {
+            lines.push(`→ Sleep scores are **stable**`);
+          }
+        }
+
+        // Rolling averages
+        if (durations.length >= 7) {
+          const rolling = rollingAverages(durations);
+          lines.push("");
+          lines.push("### Rolling Averages");
+          lines.push(`- Last 7 days: ${formatDuration(rolling.day7.value)}`);
+          if (durations.length >= 14) {
+            lines.push(`- Last 14 days: ${formatDuration(rolling.day14.value)}`);
+          }
+          if (durations.length >= 30) {
+            lines.push(`- Last 30 days: ${formatDuration(rolling.day30.value)}`);
+          }
+        }
+
+        // Day of week patterns
+        const dowData = sessions.map((s) => ({
+          date: s.day,
+          value: (s.total_sleep_duration ?? 0) / 3600, // hours
+        }));
+        const dowAnalysis = dayOfWeekAnalysis(dowData);
+        lines.push("");
+        lines.push("### Day of Week Patterns");
+        lines.push(`- **Best night:** ${dowAnalysis.bestDay.day} (${dowAnalysis.bestDay.average.toFixed(1)}h avg)`);
+        lines.push(`- **Worst night:** ${dowAnalysis.worstDay.day} (${dowAnalysis.worstDay.average.toFixed(1)}h avg)`);
+        lines.push(`- **Weekday avg:** ${dowAnalysis.weekdayAverage.toFixed(1)}h`);
+        lines.push(`- **Weekend avg:** ${dowAnalysis.weekendAverage.toFixed(1)}h`);
+
+        // Variability
+        const durationDispersion = dispersion(durations.map((d) => d / 3600));
+        lines.push("");
+        lines.push("### Variability");
+        lines.push(`- **Range:** ${durationDispersion.min.toFixed(1)}h - ${durationDispersion.max.toFixed(1)}h`);
+        lines.push(`- **Coefficient of variation:** ${durationDispersion.coefficientOfVariation.toFixed(0)}%`);
+        if (durationDispersion.coefficientOfVariation > 20) {
+          lines.push("  *(High variability - consider more consistent bedtimes)*");
+        }
+
+        // Best and worst nights
+        const sortedByDuration = [...sessions].sort(
+          (a, b) => (b.total_sleep_duration ?? 0) - (a.total_sleep_duration ?? 0)
+        );
+        lines.push("");
+        lines.push("### Notable Nights");
+        const best = sortedByDuration[0];
+        const worst = sortedByDuration[sortedByDuration.length - 1];
+        lines.push(`- **Best:** ${best.day} - ${formatDuration(best.total_sleep_duration ?? 0)}`);
+        lines.push(`- **Worst:** ${worst.day} - ${formatDuration(worst.total_sleep_duration ?? 0)}`);
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
+        };
+      }
+    }
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // correlate_metrics tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "correlate_metrics",
+    {
+      description:
+        "Find correlations between two health metrics. For example, see if your HRV correlates with sleep duration, or if activity affects your readiness. Returns correlation strength, direction, and statistical significance.",
+      inputSchema: {
+        metric1: z.enum(["sleep_duration", "deep_sleep", "rem_sleep", "hrv", "heart_rate", "efficiency", "readiness", "activity", "steps"]).describe("First metric to correlate"),
+        metric2: z.enum(["sleep_duration", "deep_sleep", "rem_sleep", "hrv", "heart_rate", "efficiency", "readiness", "activity", "steps"]).describe("Second metric to correlate"),
+        days: z.number().optional().describe("Number of days to analyze (default: 30)"),
+      },
+    },
+    async ({ metric1, metric2, days = 30 }) => {
+      try {
+        const endDate = getToday();
+        const startDate = getDaysAgo(days);
+
+        // Fetch all data we might need
+        const [sleepResult, readinessResult, activityResult] = await Promise.allSettled([
+          client.getSleep(startDate, endDate),
+          client.getDailyReadiness(startDate, endDate),
+          client.getDailyActivity(startDate, endDate),
+        ]);
+
+        // Filter to only main sleep sessions (exclude naps, rest periods)
+        const allSleep = sleepResult.status === "fulfilled" ? sleepResult.value.data : [];
+        const sleepSessions: SleepSession[] = allSleep.filter((s) => s.type === "long_sleep");
+        const readinessData: DailyReadiness[] = readinessResult.status === "fulfilled" ? readinessResult.value.data : [];
+        const activityData: DailyActivity[] = activityResult.status === "fulfilled" ? activityResult.value.data : [];
+
+        // Create lookup maps by day
+        const sleepByDay = new Map<string, SleepSession>(sleepSessions.map((s) => [s.day, s]));
+        const readinessByDay = new Map<string, DailyReadiness>(readinessData.map((r) => [r.day, r]));
+        const activityByDay = new Map<string, DailyActivity>(activityData.map((a) => [a.day, a]));
+
+        // Helper to extract metric value
+        const getMetricValue = (day: string, metric: string): number | null => {
+          const sleep = sleepByDay.get(day);
+          const readiness = readinessByDay.get(day);
+          const activity = activityByDay.get(day);
+
+          switch (metric) {
+            case "sleep_duration":
+              return sleep?.total_sleep_duration ? sleep.total_sleep_duration / 3600 : null;
+            case "deep_sleep":
+              return sleep?.deep_sleep_duration ? sleep.deep_sleep_duration / 3600 : null;
+            case "rem_sleep":
+              return sleep?.rem_sleep_duration ? sleep.rem_sleep_duration / 3600 : null;
+            case "hrv":
+              return sleep?.average_hrv ?? null;
+            case "heart_rate":
+              return sleep?.average_heart_rate ?? null;
+            case "efficiency":
+              return sleep?.efficiency ?? null;
+            case "readiness":
+              return readiness?.score ?? null;
+            case "activity":
+              return activity?.score ?? null;
+            case "steps":
+              return activity?.steps ?? null;
+            default:
+              return null;
+          }
+        };
+
+        // Get all unique days
+        const allDays = new Set([
+          ...sleepSessions.map((s) => s.day),
+          ...readinessData.map((r) => r.day),
+          ...activityData.map((a) => a.day),
+        ]);
+
+        // Build paired data points
+        const values1: number[] = [];
+        const values2: number[] = [];
+
+        for (const day of allDays) {
+          const v1 = getMetricValue(day, metric1);
+          const v2 = getMetricValue(day, metric2);
+          if (v1 !== null && v2 !== null) {
+            values1.push(v1);
+            values2.push(v2);
+          }
+        }
+
+        if (values1.length < 5) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Need at least 5 days with both metrics available. Found ${values1.length} matching days.`,
+              },
+            ],
+          };
+        }
+
+        const result = correlate(values1, values2);
+        const metricLabels: Record<string, string> = {
+          sleep_duration: "Sleep Duration",
+          deep_sleep: "Deep Sleep",
+          rem_sleep: "REM Sleep",
+          hrv: "HRV",
+          heart_rate: "Heart Rate",
+          efficiency: "Sleep Efficiency",
+          readiness: "Readiness Score",
+          activity: "Activity Score",
+          steps: "Steps",
+        };
+
+        const lines = [
+          `## Correlation Analysis`,
+          "",
+          `**${metricLabels[metric1]}** vs **${metricLabels[metric2]}**`,
+          "",
+          `- **Correlation:** ${result.correlation.toFixed(2)} (${result.strength} ${result.direction})`,
+          `- **Statistical significance:** ${result.significant ? "Yes" : "No"} (p = ${result.pValue.toFixed(3)})`,
+          `- **Sample size:** ${result.n} days`,
+          "",
+        ];
+
+        // Interpretation
+        if (result.strength === "none") {
+          lines.push(`→ No meaningful relationship between these metrics.`);
+        } else if (result.direction === "positive") {
+          lines.push(`→ When ${metricLabels[metric1].toLowerCase()} increases, ${metricLabels[metric2].toLowerCase()} tends to increase.`);
+        } else {
+          lines.push(`→ When ${metricLabels[metric1].toLowerCase()} increases, ${metricLabels[metric2].toLowerCase()} tends to decrease.`);
+        }
+
+        if (!result.significant) {
+          lines.push("");
+          lines.push("*Note: This correlation is not statistically significant. More data may be needed.*");
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text" as const, text: formatError(error) }],
         };
       }
     }
