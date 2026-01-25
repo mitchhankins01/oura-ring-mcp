@@ -79,97 +79,9 @@ scripts/
 
 ## Development Phases
 
-### Phase 1: Hello World ✅
-- [x] Project scaffold
-- [x] Basic MCP server with stdio transport
-- [x] `get_sleep` tool with human-readable output
-- [x] `get_readiness` tool
-- [x] `get_activity` tool
-- [x] Test with Claude Desktop
+See [README.md](README.md#roadmap) for the full roadmap with detailed checklists.
 
-### Phase 2: Cover the API
-- [x] Generate types from OpenAPI: `pnpm generate-types`
-- [x] Add high-priority endpoints:
-  - [x] `get_stress` - Daily stress levels and recovery time
-  - [x] `get_daily_sleep` - Sleep scores with contributors
-  - [x] `get_heart_rate` - Individual HR readings with timestamps
-  - [x] `get_workouts` - Workout sessions with activity type and intensity
-  - [x] `get_spo2` - Blood oxygen saturation and breathing disturbance index
-  - [x] `get_vo2_max` - Cardiorespiratory fitness measurements
-- [x] Add remaining endpoints:
-  - [x] `get_resilience` - Body's capacity to recover from stress
-  - [x] `get_cardiovascular_age` - Estimated vascular age
-  - [x] `get_tags` - User-created tags and notes
-  - [x] `get_sessions` - Meditation/breathing sessions
-- [x] Add MCP resources (`oura://today`, `oura://weekly-summary`)
-- [x] Better error messages (OuraApiError class, user-friendly messages, no-data tips)
-- [x] Set up Vitest with coverage thresholds (75/80/80/80)
-- [x] Create test infrastructure (fixtures, helpers directories)
-- [x] Write comprehensive tests for formatters (96%+ coverage achieved)
-- [x] Add tests for Oura client (mocked fetch)
-- [x] Add tests for tool handlers (mocked client)
-- [x] Add tests for MCP server (mocked SDK)
-- [x] Validate fixtures against real API (scripts/validate-fixtures.ts)
-- [x] Set up CI/CD for automated testing (GitHub Actions)
-- [x] Add pre-commit hooks for test validation (husky)
-
-### Phase 3: Make it Smart
-See `docs/RESEARCH.md` for detailed inspiration, formulas, and code examples from Wearipedia notebook.
-
-**Derived metrics to compute:**1
-- [ ] Sleep stage ratios (deep/REM/light as % of total sleep)
-- [ ] Sleep debt tracking (vs 8hr target)
-- [ ] Sleep score formula (efficiency + deep% + REM%)
-- [ ] HRV recovery pattern (first half vs second half of night)
-- [ ] Rolling averages (7-day, 14-day, 30-day)
-- [ ] Trend detection via linear regression slope
-- [ ] Anomaly detection (IQR method + Z-score method)
-- [ ] Sleep regularity score (consistency of bed/wake times)
-- [ ] Day-of-week patterns ("I sleep worst on Fridays")
-- [ ] Dispersion analysis (coefficient of variation)
-
-
-**HRV-specific features (from hrvanalysis library):**
-- [ ] Time domain: SDNN, RMSSD, pNN50, CVSD
-- [ ] Frequency domain: LF, HF, LF/HF ratio (sympathovagal balance)
-- [ ] Non-linear: Poincaré SD1/SD2 (short vs long-term variability)
-- [ ] Preprocessing: ectopic beat removal (malik method)
-
-**Smart tools:**
-- [ ] `analyze_sleep_quality(days)` - Patterns and insights
-- [ ] `analyze_hrv_trend(days)` - Recovery trajectory  
-- [ ] `compare_periods(period1, period2)` - This week vs last week
-- [ ] `compare_conditions(tag1, tag2, metric)` - Alcohol vs no alcohol
-- [ ] `detect_anomalies(days)` - Flag unusual readings (IQR + Z-score)
-- [ ] `correlate(metric1, metric2, days)` - Pearson correlation with p-value
-- [ ] `best_sleep_conditions()` - What predicts your good nights
-- [ ] `day_of_week_analysis(metric)` - Weekly patterns
-
-**Visualization-ready data (for Claude artifacts):**
-- [ ] Sleep stages stackplot data (Oura app style)
-- [ ] Heart rate during sleep with smoothing
-- [ ] Body temperature trend bars
-- [ ] Multi-metric overlays with gaussian smoothing
-- [ ] Poincaré plot data (SD1/SD2 ellipse)
-
-**MCP features:**
-- [ ] Prompts for common analysis tasks
-
-### Phase 4a: Ship It (Local)
-- [ ] CLI auth flow: `npx oura-mcp auth` (for when PAT deprecated end of 2025)
-- [ ] Publish to npm as `@username/oura-mcp`
-- [ ] Great README with:
-  - Demo gif
-  - "What can I ask Claude?" examples
-  - Screenshots
-- [ ] Add to MCP registry
-
-### Phase 4b: Remote Access
-- [ ] HTTP transport (SSE) for remote connections
-- [ ] Hosted OAuth callback flow
-- [ ] Deploy to Railway/Fly/Render
-- [ ] Add production monitoring (highlight/datadog etc)
-- [ ] Connect from Claude mobile (when MCP support lands)
+**Current status:** Phase 2 complete, Phase 3 (Make it Smart) in progress.
 
 ## Key Files
 
@@ -182,7 +94,7 @@ See `docs/RESEARCH.md` for detailed inspiration, formulas, and code examples fro
 
 ## Reference Materials
 
-- **Wearipedia notebook** (`oura_ring_gen_3.ipynb`) - Comprehensive Oura analysis from Stanford
+- **Wearipedia notebook** ([docs/reference/oura_ring_gen_3.ipynb](docs/reference/oura_ring_gen_3.ipynb)) - Comprehensive Oura analysis from Stanford
   - Sleep stage visualization (stackplots)
   - Outlier detection (IQR, Z-score)
   - Correlation analysis with p-values
@@ -330,13 +242,7 @@ Then restart Claude Desktop.
    - `/sleep` → detailed session data (duration, stages, bedtime, HR, HRV, breathing)
    - Both `get_sleep` tool AND `oura://today` resource call BOTH endpoints to show complete data
    - The Oura app shows data from both endpoints combined
-6. **Oura API single-date query quirk** - Several endpoints return empty for `start == end`:
-   - **Affected endpoints**: `/sleep`, `/daily_activity`, `/workout`, `/session`, `/tag`, `/enhanced_tag`
-   - **NOT affected**: `/daily_sleep`, `/daily_readiness`, `/daily_stress`, `/daily_spo2`, `/heartrate`, etc.
-   - Example: `GET /sleep?start_date=2026-01-21&end_date=2026-01-21` → returns `[]`
-   - Example: `GET /sleep?start_date=2026-01-20&end_date=2026-01-22` → returns data for 01-21
-   - **Workaround**: Most methods expand by ±1 day; `client.getEnhancedTags()` needs ±3 days (worse bug)
-   - This matches how other Oura libraries work (always query ranges, filter client-side)
+6. **Oura API single-date query quirk** - See [README.md](README.md#oura-api-quirks) for details. TL;DR: some endpoints return empty for `start == end`, so we expand by ±1 day and filter.
 
 ## Auth Strategy
 
@@ -356,103 +262,10 @@ Server reads token from file, refreshes automatically. Still stdio transport.
 - Deploy to Railway/Fly/Render
 - Enables mobile access when Claude app supports MCP
 
-## Oura API Quirks & Bugs (For Oura Dev Team)
+## Oura API Quirks
 
-This section documents issues discovered while building this MCP server that the Oura engineering team may want to address.
+See [README.md](README.md#oura-api-quirks) for the full list. Key points for development:
 
-### 1. Single-Date Query Bug (Critical)
-
-**Severity:** High - Forces all API consumers to implement workarounds
-
-**Affected endpoints:**
-- `/usercollection/sleep`
-- `/usercollection/daily_activity`
-- `/usercollection/workout`
-- `/usercollection/session`
-- `/usercollection/tag`
-- `/usercollection/enhanced_tag`
-
-**Issue:** When `start_date == end_date`, these endpoints return empty arrays even when data exists for that date.
-
-**Example:**
-```bash
-# Returns empty array despite data existing for 2026-01-21
-curl "https://api.ouraring.com/v2/usercollection/sleep?start_date=2026-01-21&end_date=2026-01-21"
-# Response: {"data": [], "next_token": null}
-
-# Returns data when range is expanded
-curl "https://api.ouraring.com/v2/usercollection/sleep?start_date=2026-01-20&end_date=2026-01-22"
-# Response: {"data": [{...data for 01-21...}], "next_token": null}
-```
-
-**Workaround:** Query with ±1 day range and filter results client-side.
-
-**Note:** The `/enhanced_tag` endpoint is worse - requires ±3 days to reliably return data.
-
-**NOT affected:** `/daily_sleep`, `/daily_readiness`, `/daily_stress`, `/daily_spo2`, `/heartrate`, `/vO2_max`, `/daily_resilience`, `/daily_cardiovascular_age`
-
-### 2. OpenAPI Spec Missing `sleep_regularity`
-
-**Severity:** Medium - Causes TypeScript type errors for API consumers
-
-**Issue:** The v2 API returns `sleep_regularity` in `ReadinessContributors`, but it's not documented in the OpenAPI spec (v1.27).
-
-**API Response:**
-```json
-{
-  "contributors": {
-    "activity_balance": 93,
-    "body_temperature": 100,
-    "hrv_balance": 89,
-    "previous_day_activity": 87,
-    "previous_night": 63,
-    "recovery_index": 100,
-    "resting_heart_rate": 94,
-    "sleep_balance": 97,
-    "sleep_regularity": 79  // ← Not in OpenAPI spec
-  }
-}
-```
-
-**Impact:** TypeScript consumers using generated types must cast to access this field:
-```typescript
-const sleepRegularity = (contributors as Record<string, unknown>).sleep_regularity;
-```
-
-**Fix:** Add `sleep_regularity` to the `ReadinessContributors` schema in the OpenAPI spec.
-
-### 3. Internal vs Public API Discrepancy
-
-**Severity:** Low - Informational
-
-**Issue:** The Oura Cloud dashboard (`cloud.ouraring.com/dashboard`) uses internal API endpoints that return additional fields not available in the public v2 API:
-
-| Field | Internal API | Public v2 API |
-|-------|--------------|---------------|
-| `average_breath_variation` | ✅ | ❌ |
-| `got_ups` | ✅ | ❌ |
-| `sleep_midpoint` | ✅ | ❌ |
-| `wake_ups` | ✅ | ❌ (only in some responses) |
-| Activity targets (`target_calories`, `target_meters`) | ✅ | ❌ |
-
-**Recommendation:** Consider exposing these fields in the public API for feature parity.
-
-### 4. Inconsistent Endpoint Naming
-
-**Severity:** Low - Cosmetic
-
-**Observations:**
-- `/vO2_max` uses camelCase with uppercase O (inconsistent with other endpoints)
-- Some endpoints use `daily_` prefix, others don't (e.g., `/sleep` vs `/daily_sleep`)
-- `/heartrate` is one word, but other metrics use underscores
-
-### 5. Documentation Issues
-
-**OpenAPI spec location:** The download link on https://cloud.ouraring.com/v2/docs is not versioned in the URL, making it hard to track spec changes.
-
-**Suggestion:** Include version in filename (e.g., `oura-api-v2-spec-1.27.json`) or provide a changelog.
-
----
-
-*Last updated: 2026-01-25*
-*Tested against Oura API v2, OpenAPI spec v1.27*
+- **Single-date query bug**: `/sleep`, `/daily_activity`, `/workout`, `/session`, `/tag`, `/enhanced_tag` return empty when `start == end`. Workaround: query ±1 day (±3 for enhanced_tag).
+- **Missing `sleep_regularity`**: Not in OpenAPI spec but returned by API. Cast to access.
+- **Two sleep endpoints**: `/daily_sleep` (scores only) vs `/sleep` (detailed sessions). Use both for complete data.
