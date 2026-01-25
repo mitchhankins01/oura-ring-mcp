@@ -1,6 +1,7 @@
 # 🌙 Oura MCP Server
 
-[![CI](https://github.com/mitchhankins01/oura-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mitchhankins01/oura-mcp/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/oura-ring-mcp.svg)](https://www.npmjs.com/package/oura-ring-mcp)
+[![CI](https://github.com/mitchhankins01/oura-ring-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mitchhankins01/oura-ring-mcp/actions/workflows/ci.yml)
 
 An MCP server that connects your Oura Ring to Claude and other AI assistants. Get human-readable insights about your sleep, readiness, and activity—not just raw JSON.
 
@@ -19,10 +20,12 @@ An MCP server that connects your Oura Ring to Claude and other AI assistants. Ge
 ### 1. Install
 
 ```bash
-git clone https://github.com/yourusername/oura-mcp.git
-cd oura-mcp
-pnpm install
-pnpm build
+npm install -g oura-ring-mcp
+```
+
+Or use directly with npx (no install needed):
+```bash
+npx oura-ring-mcp
 ```
 
 ### 2. Authenticate with Oura
@@ -45,14 +48,14 @@ pnpm build
    ```
 3. Run the auth flow:
    ```bash
-   pnpm exec oura-ring-mcp auth
+   npx oura-ring-mcp auth
    ```
 4. A browser will open for Oura authorization. After approving, credentials are saved to `~/.oura-mcp/credentials.json`
 
 **Managing OAuth credentials:**
 ```bash
-pnpm exec oura-ring-mcp status   # Check authentication status
-pnpm exec oura-ring-mcp logout   # Clear stored credentials
+npx oura-ring-mcp status   # Check authentication status
+npx oura-ring-mcp logout   # Clear stored credentials
 ```
 
 ### 3. Configure Claude Desktop
@@ -64,8 +67,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 {
   "mcpServers": {
     "oura": {
-      "command": "node",
-      "args": ["/absolute/path/to/oura-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["oura-ring-mcp"],
       "env": {
         "OURA_ACCESS_TOKEN": "your_token_here"
       }
@@ -74,13 +77,13 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-**With OAuth (after running `auth` command):**
+**With OAuth (after running `npx oura-ring-mcp auth`):**
 ```json
 {
   "mcpServers": {
     "oura": {
-      "command": "node",
-      "args": ["/absolute/path/to/oura-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["oura-ring-mcp"],
       "env": {
         "OURA_CLIENT_ID": "your_client_id",
         "OURA_CLIENT_SECRET": "your_client_secret"
@@ -90,7 +93,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
-**Important**: Replace `/absolute/path/to/oura-mcp` with the actual path to your installation. This project requires Node >=24.
+**Note**: This project requires Node >=24.
 
 Restart Claude Desktop.
 
@@ -295,10 +298,10 @@ See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and
 - [x] `monthly-trends` - 30-day trend analysis with correlations
 - [x] `quick-status` - Brief daily status check
 
-### Phase 4a: Ship It (Local)
+### Phase 4a: Ship It (Local) ✅
 - [x] CLI auth flow: `npx oura-ring-mcp auth` (for when PAT deprecated)
-- [ ] Publish to npm as `oura-ring-mcp`
-- [ ] Great README with demo gif, examples, screenshots
+- [x] Publish to npm as `oura-ring-mcp`
+- [ ] Demo gif, examples, screenshots
 - [ ] Add to MCP registry
 
 ### Phase 4b: Remote Access

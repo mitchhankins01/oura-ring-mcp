@@ -8,6 +8,18 @@
   "bin": {
     "oura-ring-mcp": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mitchhankins01/oura-ring-mcp.git"
+  },
+  "homepage": "https://github.com/mitchhankins01/oura-ring-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/mitchhankins01/oura-ring-mcp/issues"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
