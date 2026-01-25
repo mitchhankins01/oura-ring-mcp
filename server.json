@@ -6,12 +6,12 @@
     "url": "https://github.com/mitchhankins01/oura-ring-mcp",
     "source": "github"
   },
-  "version": "0.1.0",
+  "version": "0.1.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "oura-ring-mcp",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "transport": {
         "type": "stdio"
       },

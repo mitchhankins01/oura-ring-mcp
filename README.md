@@ -302,7 +302,7 @@ See [docs/RESEARCH.md](docs/RESEARCH.md) for detailed inspiration, formulas, and
 - [x] CLI auth flow: `npx oura-ring-mcp auth` (for when PAT deprecated)
 - [x] Publish to npm as `oura-ring-mcp`
 - [ ] Demo gif, examples, screenshots
-- [ ] Add to MCP registry
+- [x] Add to MCP registry
 
 ### Phase 4b: Remote Access
 - [ ] HTTP transport (SSE) for remote connections
