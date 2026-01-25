@@ -312,6 +312,11 @@ Then restart Claude Desktop.
 2. **Sensible defaults**: `get_sleep()` with no args returns today's data
 3. **Score interpretation**: We add context like "85 (Optimal)" not just "85"
 4. **Sleep percentages**: Calculated from `total_sleep_duration`, not `time_in_bed` (matches Oura app)
+5. **Oura has TWO sleep endpoints** - IMPORTANT for resources/tools:
+   - `/daily_sleep` → scores and contributors only (no duration, stages, HR, HRV)
+   - `/sleep` → detailed session data (duration, stages, bedtime, HR, HRV, breathing)
+   - Resources like `oura://today` must call BOTH endpoints to show complete data
+   - The Oura app shows data from both endpoints combined
 
 ## Auth Strategy
 

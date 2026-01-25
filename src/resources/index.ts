@@ -10,10 +10,10 @@ import type { OuraClient } from "../client.js";
 import {
   formatDuration,
   formatScore,
-  formatSleepStages,
   formatTime,
   getToday,
   getDaysAgo,
+  percentage,
 } from "../utils/formatters.js";
 
 /**
@@ -37,22 +37,74 @@ export function registerResources(server: McpServer, client: OuraClient): void {
 
       sections.push(`# Oura Health Summary for ${today}\n`);
 
-      // Fetch all data in parallel
-      const [sleepResult, readinessResult, activityResult, stressResult] = await Promise.allSettled([
+      // Fetch all data in parallel (including detailed sleep sessions)
+      const [sleepScoreResult, sleepSessionResult, readinessResult, activityResult, stressResult] = await Promise.allSettled([
         client.getDailySleep(today, today),
+        client.getSleep(today, today),
         client.getDailyReadiness(today, today),
         client.getDailyActivity(today, today),
         client.getDailyStress(today, today),
       ]);
 
-      // Sleep
-      if (sleepResult.status === "fulfilled" && sleepResult.value.data.length > 0) {
-        const sleep = sleepResult.value.data[0];
+      // Sleep - combine score and detailed session data
+      const hasScore = sleepScoreResult.status === "fulfilled" && sleepScoreResult.value.data.length > 0;
+      const hasSession = sleepSessionResult.status === "fulfilled" && sleepSessionResult.value.data.length > 0;
+
+      if (hasScore || hasSession) {
         sections.push("## Sleep");
-        sections.push(`- Score: ${formatScore(sleep.score ?? null)}`);
-        if (sleep.contributors) {
-          const c = sleep.contributors;
-          sections.push(`- Contributors: Deep sleep ${c.deep_sleep ?? "N/A"}, REM ${c.rem_sleep ?? "N/A"}, Efficiency ${c.efficiency ?? "N/A"}, Timing ${c.timing ?? "N/A"}`);
+
+        // Score from daily_sleep
+        if (hasScore) {
+          const sleep = sleepScoreResult.value.data[0];
+          sections.push(`- Score: ${formatScore(sleep.score ?? null)}`);
+        }
+
+        // Detailed data from sleep sessions (use the longest/main session)
+        if (hasSession) {
+          const sessions = sleepSessionResult.value.data;
+          // Find the main sleep session (longest one)
+          const mainSession = sessions.reduce((longest, current) =>
+            (current.total_sleep_duration ?? 0) > (longest.total_sleep_duration ?? 0) ? current : longest
+          );
+
+          const totalSleep = mainSession.total_sleep_duration ?? 0;
+          const timeInBed = mainSession.time_in_bed ?? 0;
+          const deepSleep = mainSession.deep_sleep_duration ?? 0;
+          const remSleep = mainSession.rem_sleep_duration ?? 0;
+          const lightSleep = mainSession.light_sleep_duration ?? 0;
+
+          sections.push(`- Total Sleep: ${formatDuration(totalSleep)} (of ${formatDuration(timeInBed)} in bed)`);
+          sections.push(`- Efficiency: ${percentage(totalSleep, timeInBed)}%`);
+          sections.push(`- Bedtime: ${formatTime(mainSession.bedtime_start)} → ${formatTime(mainSession.bedtime_end)}`);
+          sections.push("");
+          sections.push("**Sleep Stages:**");
+          sections.push(`- Deep: ${formatDuration(deepSleep)} (${percentage(deepSleep, totalSleep)}%)`);
+          sections.push(`- REM: ${formatDuration(remSleep)} (${percentage(remSleep, totalSleep)}%)`);
+          sections.push(`- Light: ${formatDuration(lightSleep)} (${percentage(lightSleep, totalSleep)}%)`);
+
+          // Biometrics
+          if (mainSession.average_heart_rate || mainSession.average_hrv) {
+            sections.push("");
+            sections.push("**Biometrics:**");
+            if (mainSession.lowest_heart_rate) {
+              sections.push(`- Resting HR: ${mainSession.lowest_heart_rate} bpm`);
+            }
+            if (mainSession.average_hrv) {
+              sections.push(`- Avg HRV: ${mainSession.average_hrv} ms`);
+            }
+            if (mainSession.average_breath) {
+              sections.push(`- Breathing Rate: ${mainSession.average_breath} breaths/min`);
+            }
+          }
+        }
+
+        // Contributors from daily_sleep (if no detailed session)
+        if (hasScore && !hasSession) {
+          const sleep = sleepScoreResult.value.data[0];
+          if (sleep.contributors) {
+            const c = sleep.contributors;
+            sections.push(`- Contributors: Deep sleep ${c.deep_sleep ?? "N/A"}, REM ${c.rem_sleep ?? "N/A"}, Efficiency ${c.efficiency ?? "N/A"}, Timing ${c.timing ?? "N/A"}`);
+          }
         }
         sections.push("");
       } else {
