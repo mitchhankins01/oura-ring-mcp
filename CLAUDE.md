@@ -172,6 +172,14 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - [ ] Deploy to Railway/Fly/Render
 - [ ] Mobile access when Claude app supports MCP
 
+### Phase 5: Advanced Analytics & Integrations (Future)
+- [ ] Advanced HRV analysis (frequency domain: VLF, LF, HF, LF/HF ratio)
+- [ ] Poincaré plot metrics (SD1, SD2) for HRV non-linear analysis
+- [ ] Chart-ready data structures for visualization suggestions
+- [ ] Proactive health alerts based on anomaly detection
+- [ ] Integration with other health data sources (Apple Health, Fitbit, Garmin)
+- [ ] Predictive insights (e.g., illness prediction from temperature trends)
+
 **Current status:** Phase 4a complete. Published to npm and MCP Registry. 27 tools, 7 resources, 7 prompts.
 
 ## Key Files
