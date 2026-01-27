@@ -1,0 +1,34 @@
+# Dependencies
+node_modules
+
+# Build output (rebuilt in container)
+dist
+
+# Development files
+*.test.ts
+tests/
+coverage/
+.vitest/
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment (secrets should be set via Railway dashboard)
+.env
+.env.*
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Misc
+*.log
+.DS_Store

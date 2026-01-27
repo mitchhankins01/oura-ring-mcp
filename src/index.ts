@@ -6,7 +6,8 @@
  * Designed to give LLMs human-readable summaries alongside raw data.
  *
  * CLI Commands:
- *   npx oura-ring-mcp          - Start the MCP server (default)
+ *   npx oura-ring-mcp          - Start the MCP server (stdio transport)
+ *   npx oura-ring-mcp --http   - Start with HTTP transport (for remote deployment)
  *   npx oura-ring-mcp auth     - Authenticate with Oura via OAuth
  *   npx oura-ring-mcp logout   - Clear stored credentials
  *   npx oura-ring-mcp status   - Show authentication status
@@ -28,6 +29,7 @@ import { refreshAccessToken, getOAuthConfigFromEnv } from "./auth/oauth.js";
 
 const args = process.argv.slice(2);
 const command = args[0];
+const useHttpTransport = args.includes("--http") || args.includes("-H");
 
 // Handle CLI subcommands
 if (["auth", "logout", "status"].includes(command)) {
@@ -129,9 +131,16 @@ registerPrompts(server);
 // ─────────────────────────────────────────────────────────────
 
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Oura MCP server running on stdio");
+  if (useHttpTransport) {
+    // HTTP transport for remote deployment
+    const { startHttpServer } = await import("./transports/http.js");
+    await startHttpServer(server);
+  } else {
+    // Stdio transport for local use (Claude Desktop)
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Oura MCP server running on stdio");
+  }
 }
 
 main().catch((error) => {
