@@ -167,9 +167,9 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - [x] Demo GIF and examples
 
 ### Phase 4b: Remote Access (Future)
-- [ ] HTTP transport with SSE
-- [ ] OAuth callback hosted on server
-- [ ] Deploy to Railway/Fly/Render
+- [ ] HTTP transport with SSE (blocker for remote use)
+- [ ] Deploy to Railway/Fly/Render (use PAT env var for auth initially)
+- [ ] OAuth callback hosted on server (enables browser-based auth flow)
 - [ ] Mobile access when Claude app supports MCP
 
 ### Phase 5: Advanced Analytics & Integrations (Future)
