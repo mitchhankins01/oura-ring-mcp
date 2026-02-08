@@ -169,7 +169,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 ### Phase 4b: Remote Access (In Progress)
 - [x] HTTP transport with Streamable HTTP (blocker for remote use)
 - [x] Railway deployment config (Dockerfile, railway.json, .dockerignore, README docs)
-- [ ] Deploy to Railway (use PAT env var for auth initially)
+- [x] Deploy to Railway (PAT env var for auth)
 - [ ] OAuth callback hosted on server (enables browser-based auth flow)
 - [ ] Mobile access when Claude app supports MCP
 
