@@ -21,7 +21,7 @@ import express, { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
+import { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
 import {
   OuraMcpOAuthProvider,
@@ -205,8 +205,15 @@ export async function startHttpServer(
       }
     });
 
-    // Protect MCP endpoint with bearer auth
-    const bearerAuth = requireBearerAuth({ verifier: oauthProvider });
+    // Protect MCP endpoint with bearer auth.
+    // resourceMetadataUrl tells Claude.ai where to find OAuth metadata from the 401 response.
+    const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(
+      new URL("/mcp", baseUrl)
+    );
+    const bearerAuth = requireBearerAuth({
+      verifier: oauthProvider,
+      resourceMetadataUrl,
+    });
 
     // ── MCP Endpoint ─────────────────────────────────────────
 
