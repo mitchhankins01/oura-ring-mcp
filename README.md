@@ -220,7 +220,7 @@ Railway automatically sets `PORT` and `RAILWAY_PUBLIC_DOMAIN`.
 
 Use the **connector** in Claude.ai:
 1. Go to Settings > MCP Connectors > Add
-2. Enter your server URL: `https://your-app.railway.app/mcp`
+2. Enter your server URL: `https://your-app.railway.app` (without `/mcp`)
 3. Leave OAuth Client ID and Secret empty (dynamic registration handles it)
 4. You'll be redirected to Oura to authorize access to your data
 

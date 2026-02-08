@@ -87,6 +87,9 @@ export async function startHttpServer(
 
   const app = express();
 
+  // Trust Railway's load balancer (fixes X-Forwarded-For rate limit errors)
+  app.set("trust proxy", 1);
+
   // Parse JSON bodies
   app.use(express.json());
 
@@ -155,12 +158,14 @@ export async function startHttpServer(
     const oauthProvider = new OuraMcpOAuthProvider(providerOptions);
 
     // Mount OAuth endpoints (metadata, authorize, token, register, revoke)
+    // resourceServerUrl is set to baseUrl (root) so Claude.ai can find
+    // protected resource metadata at /.well-known/oauth-protected-resource
     app.use(
       mcpAuthRouter({
         provider: oauthProvider,
         issuerUrl: baseUrl,
         baseUrl: baseUrl,
-        resourceServerUrl: new URL("/mcp", baseUrl),
+        resourceServerUrl: baseUrl,
         resourceName: "Oura MCP Server",
         scopesSupported: [],
       })
@@ -212,7 +217,10 @@ export async function startHttpServer(
 
     const transports = new Map<string, StreamableHTTPServerTransport>();
 
-    app.all("/mcp", bearerAuth, async (req: Request, res: Response) => {
+    // MCP endpoint at root (/) for Claude.ai compatibility
+    // Also handle /mcp for backward compatibility with existing configs
+    const mcpHandler = async (req: Request, res: Response) => {
+      console.error(`[MCP] ${req.method} ${req.path} request received`);
       try {
         const sessionId = req.headers["mcp-session-id"] as string | undefined;
         let transport: StreamableHTTPServerTransport;
@@ -248,9 +256,9 @@ export async function startHttpServer(
           });
         }
       }
-    });
+    };
 
-    app.delete("/mcp", bearerAuth, async (req: Request, res: Response) => {
+    const mcpDeleteHandler = async (req: Request, res: Response) => {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
       if (sessionId && transports.has(sessionId)) {
         const transport = transports.get(sessionId)!;
@@ -260,7 +268,15 @@ export async function startHttpServer(
       } else {
         res.status(404).json({ error: "Session not found" });
       }
-    });
+    };
+
+    // Mount MCP handlers at both / and /mcp for compatibility
+    app.post("/", bearerAuth, mcpHandler);
+    app.get("/", bearerAuth, mcpHandler);
+    app.delete("/", bearerAuth, mcpDeleteHandler);
+    app.post("/mcp", bearerAuth, mcpHandler);
+    app.get("/mcp", bearerAuth, mcpHandler);
+    app.delete("/mcp", bearerAuth, mcpDeleteHandler);
 
     console.error("OAuth 2.1 authentication enabled (Oura proxy)");
     if (secret) {
@@ -272,7 +288,8 @@ export async function startHttpServer(
   if (!hasOuraOAuth) {
     const transports = new Map<string, StreamableHTTPServerTransport>();
 
-    app.all("/mcp", async (req: Request, res: Response) => {
+    const mcpHandler = async (req: Request, res: Response) => {
+      console.error(`[MCP] ${req.method} ${req.path} request received`);
       try {
         const sessionId = req.headers["mcp-session-id"] as string | undefined;
         let transport: StreamableHTTPServerTransport;
@@ -308,9 +325,9 @@ export async function startHttpServer(
           });
         }
       }
-    });
+    };
 
-    app.delete("/mcp", async (req: Request, res: Response) => {
+    const mcpDeleteHandler = async (req: Request, res: Response) => {
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
       if (sessionId && transports.has(sessionId)) {
         const transport = transports.get(sessionId)!;
@@ -320,14 +337,22 @@ export async function startHttpServer(
       } else {
         res.status(404).json({ error: "Session not found" });
       }
-    });
+    };
+
+    // Mount MCP handlers at both / and /mcp for compatibility
+    app.post("/", mcpHandler);
+    app.get("/", mcpHandler);
+    app.delete("/", mcpDeleteHandler);
+    app.post("/mcp", mcpHandler);
+    app.get("/mcp", mcpHandler);
+    app.delete("/mcp", mcpDeleteHandler);
   }
 
   // Start listening
   app.listen(port, "0.0.0.0", () => {
     console.error(`Oura MCP server running on http://0.0.0.0:${port}`);
     console.error(`Public URL: ${baseUrl.href}`);
-    console.error(`MCP endpoint: POST ${baseUrl.href}mcp`);
+    console.error(`MCP endpoint: POST ${baseUrl.href} (or ${baseUrl.href}mcp)`);
     console.error(`Health check: GET /health`);
     if (hasOuraOAuth) {
       console.error(

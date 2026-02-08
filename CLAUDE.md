@@ -167,7 +167,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - [x] MCP Registry submission
 - [x] Demo GIF and examples
 
-### Phase 4b: Remote Access (In Progress)
+### Phase 4b: Remote Access ✅
 - [x] HTTP transport with Streamable HTTP (blocker for remote use)
 - [x] Railway deployment config (Dockerfile, railway.json, .dockerignore, README docs)
 - [x] Deploy to Railway (PAT env var for auth)
@@ -177,7 +177,9 @@ Pre-defined templates that guide Claude through common health analysis tasks:
   - `/authorize` → Oura OAuth → `/oauth/callback` → client redirect
   - In-memory MCP token store (access + refresh tokens)
   - Backward-compatible with MCP_SECRET bearer auth
-- [ ] Deploy OAuth update to Railway and test with Claude.ai connector
+- [x] Deploy OAuth update to Railway and test with Claude.ai connector
+  - MCP endpoint at root `/` (Claude.ai expects `/.well-known/oauth-protected-resource` without path suffix)
+  - Also supports `/mcp` for backward compatibility
 - [ ] Mobile access when Claude app supports MCP
 
 ### Phase 5: Advanced Analytics & Integrations (Future)
@@ -188,7 +190,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - [ ] Integration with other health data sources (Apple Health, Fitbit, Garmin)
 - [ ] Predictive insights (e.g., illness prediction from temperature trends)
 
-**Current status:** Phase 4b in progress. Railway deployed with OAuth 2.1 auth (Oura proxy). 27 tools, 7 resources, 7 prompts, 325 tests.
+**Current status:** Phase 4b complete. Railway deployed with OAuth 2.1 auth (Oura proxy), Claude.ai connector working. 27 tools, 7 resources, 7 prompts, 325 tests.
 
 ## Key Files
 
