@@ -9,8 +9,8 @@ RUN npm install -g pnpm
 # Copy package files
 COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies (--ignore-scripts skips husky prepare hook; no .git in Docker)
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy source and build
 COPY . .

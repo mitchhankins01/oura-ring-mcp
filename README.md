@@ -181,9 +181,16 @@ Restart Claude Desktop. Requires Node >=18.
 
 ## Remote Deployment (Railway)
 
-Deploy the MCP server for remote access — useful when Claude supports remote MCP connections (e.g., mobile).
+Deploy the MCP server for remote access. The server proxies OAuth through Oura, so users authenticate directly with their Oura account — no PAT needed.
 
-### 1. Deploy
+### 1. Create an Oura OAuth App
+
+1. Go to [Oura OAuth Applications](https://cloud.ouraring.com/oauth/applications)
+2. Create a new application
+3. Set the **Redirect URI** to: `https://your-app.railway.app/oauth/callback`
+4. Note the **Client ID** and **Client Secret**
+
+### 2. Deploy
 
 ```bash
 # Install Railway CLI
@@ -195,19 +202,31 @@ railway init
 railway up
 ```
 
-### 2. Set Environment Variables
+### 3. Set Environment Variables
 
 In the Railway dashboard, add:
 
 | Variable | Description |
 |----------|-------------|
-| `OURA_ACCESS_TOKEN` | Your [Oura PAT token](https://cloud.ouraring.com/personal-access-tokens) |
-| `MCP_SECRET` | A random secret for auth (`openssl rand -base64 32`) |
+| `OURA_CLIENT_ID` | From your Oura OAuth app |
+| `OURA_CLIENT_SECRET` | From your Oura OAuth app |
 | `NODE_ENV` | `production` |
+| `MCP_SECRET` | *(Optional)* Static bearer token for Claude Desktop (`openssl rand -base64 32`) |
+| `OURA_ACCESS_TOKEN` | *(Optional)* PAT fallback if not using OAuth (`MCP_SECRET` required) |
 
-Railway automatically sets `PORT` — no need to configure it.
+Railway automatically sets `PORT` and `RAILWAY_PUBLIC_DOMAIN`.
 
-### 3. Configure Claude Desktop
+### 4. Connect from Claude.ai
+
+Use the **connector** in Claude.ai:
+1. Go to Settings > MCP Connectors > Add
+2. Enter your server URL: `https://your-app.railway.app/mcp`
+3. Leave OAuth Client ID and Secret empty (dynamic registration handles it)
+4. You'll be redirected to Oura to authorize access to your data
+
+### 5. Connect from Claude Desktop
+
+For Claude Desktop, use `MCP_SECRET` + `OURA_ACCESS_TOKEN`:
 
 ```json
 {
@@ -225,13 +244,19 @@ Railway automatically sets `PORT` — no need to configure it.
 ### Local Testing
 
 ```bash
-# Test HTTP transport locally
-MCP_SECRET=test-secret pnpm start:http
+# With Oura OAuth (full flow)
+OURA_CLIENT_ID=your_id OURA_CLIENT_SECRET=your_secret pnpm start:http
+
+# With static secret only (requires OURA_ACCESS_TOKEN)
+OURA_ACCESS_TOKEN=your_pat MCP_SECRET=test-secret pnpm start:http
 
 # Verify health endpoint
 curl http://localhost:3000/health
 
-# Test authenticated request
+# Check OAuth metadata (only available when OURA_CLIENT_ID is set)
+curl http://localhost:3000/.well-known/oauth-authorization-server
+
+# Test authenticated request (with static secret)
 curl -X POST http://localhost:3000/mcp \
   -H "Authorization: Bearer test-secret" \
   -H "Content-Type: application/json" \

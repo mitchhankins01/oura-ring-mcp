@@ -20,12 +20,13 @@ src/
 │   └── index.ts       # MCP resources (oura://today, oura://weekly-summary)
 ├── prompts/
 │   └── index.ts       # MCP prompt templates for common analysis tasks
-├── auth/              # (Phase 4a) OAuth CLI flow
+├── auth/              # Authentication (OAuth CLI + MCP OAuth server)
 │   ├── cli.ts         # `npx oura-ring-mcp auth` command
-│   ├── oauth.ts       # OAuth2 flow helpers
-│   └── store.ts       # Token storage (~/.oura-mcp/credentials.json)
+│   ├── oauth.ts       # OAuth2 flow helpers (Oura API)
+│   ├── store.ts       # Token storage (~/.oura-mcp/credentials.json)
+│   └── mcp-oauth-provider.ts  # MCP OAuth 2.1 server provider (Phase 4b)
 ├── transports/        # Alternative transports
-│   └── http.ts        # HTTP transport for remote deployment (Phase 4b)
+│   └── http.ts        # HTTP transport with OAuth 2.1 auth (Phase 4b)
 └── utils/
     ├── formatters.ts  # Human-readable formatting (seconds→hours, etc.)
     ├── errors.ts      # Custom error types and user-friendly messages
@@ -169,8 +170,14 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 ### Phase 4b: Remote Access (In Progress)
 - [x] HTTP transport with Streamable HTTP (blocker for remote use)
 - [x] Railway deployment config (Dockerfile, railway.json, .dockerignore, README docs)
-- [ ] Deploy to Railway (use PAT env var for auth initially)
-- [ ] OAuth callback hosted on server (enables browser-based auth flow)
+- [x] Deploy to Railway (PAT env var for auth)
+- [x] MCP OAuth 2.1 server provider (enables Claude.ai connector auth)
+  - Proxies OAuth through Oura (user authenticates with their Oura account)
+  - Dynamic client registration (RFC 7591) + PKCE (S256)
+  - `/authorize` → Oura OAuth → `/oauth/callback` → client redirect
+  - In-memory MCP token store (access + refresh tokens)
+  - Backward-compatible with MCP_SECRET bearer auth
+- [ ] Deploy OAuth update to Railway and test with Claude.ai connector
 - [ ] Mobile access when Claude app supports MCP
 
 ### Phase 5: Advanced Analytics & Integrations (Future)
@@ -181,7 +188,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - [ ] Integration with other health data sources (Apple Health, Fitbit, Garmin)
 - [ ] Predictive insights (e.g., illness prediction from temperature trends)
 
-**Current status:** Phase 4b in progress. Railway deployment config ready, needs `railway up`. 27 tools, 7 resources, 7 prompts.
+**Current status:** Phase 4b in progress. Railway deployed with OAuth 2.1 auth (Oura proxy). 27 tools, 7 resources, 7 prompts, 325 tests.
 
 ## Key Files
 
@@ -193,7 +200,8 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - `src/auth/store.ts` - Credential storage (~/.oura-mcp/credentials.json)
 - `src/utils/formatters.ts` - Convert seconds to hours, format scores, etc.
 - `src/utils/analysis.ts` - Statistical analysis utilities (Phase 3 foundation)
-- `src/transports/http.ts` - HTTP transport for remote deployment (Phase 4b)
+- `src/auth/mcp-oauth-provider.ts` - MCP OAuth 2.1 server provider (Phase 4b)
+- `src/transports/http.ts` - HTTP transport with OAuth 2.1 auth (Phase 4b)
 - `scripts/validate-fixtures.ts` - Validate test fixtures against real Oura API
 - `docs/RESEARCH.md` - **Competitive analysis, derived metrics formulas, Phase 3 inspiration**
 
@@ -503,11 +511,22 @@ npx oura-ring-mcp logout   # Clear stored credentials
 ```
 Credentials saved to `~/.oura-mcp/credentials.json`. Server auto-refreshes expired tokens.
 
-**Phase 4b (Remote access):**
-- HTTP transport with SSE (Server-Sent Events)
-- OAuth callback hosted on the server itself
-- Deploy to Railway/Fly/Render
-- Enables mobile access when Claude app supports MCP
+**Option 3: Remote via Claude.ai connector (Phase 4b - implemented)**
+
+The HTTP transport proxies OAuth through Oura — users authenticate directly with Oura:
+- Server runs on Railway (or any host) with `--http` flag
+- Claude.ai discovers OAuth metadata at `/.well-known/oauth-authorization-server`
+- Dynamic client registration (RFC 7591) + PKCE (S256) authorization
+- `/authorize` redirects to Oura OAuth → user authorizes → Oura redirects to `/oauth/callback`
+- Server exchanges Oura code for tokens, then redirects back to Claude.ai
+- No PAT needed — the server gets Oura tokens via the OAuth flow
+- `MCP_SECRET` env var is also accepted as a static bearer token (requires `OURA_ACCESS_TOKEN`)
+
+Required env vars for OAuth:
+- `OURA_CLIENT_ID` - From Oura OAuth app
+- `OURA_CLIENT_SECRET` - From Oura OAuth app
+- `RAILWAY_PUBLIC_DOMAIN` or `BASE_URL` - Public URL for OAuth metadata
+- Oura app redirect URI must be set to `{BASE_URL}/oauth/callback`
 
 ## Oura API Quirks
 

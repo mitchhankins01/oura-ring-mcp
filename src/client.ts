@@ -54,6 +54,13 @@ export class OuraClient {
     this.accessToken = config.accessToken;
   }
 
+  /**
+   * Update the access token (e.g., after OAuth flow completes)
+   */
+  setAccessToken(token: string): void {
+    this.accessToken = token;
+  }
+
   private async fetch<T>(
     endpoint: string,
     params?: Record<string, string>
