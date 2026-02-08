@@ -1,18 +1,24 @@
 /**
- * MCP OAuth Server Provider
+ * MCP OAuth Server Provider — Oura Proxy
  *
- * Implements the OAuthServerProvider interface from the MCP SDK to enable
- * OAuth 2.1 authentication for remote MCP connections (e.g., Claude.ai connector).
+ * Proxies the MCP OAuth flow through Oura's OAuth2 authorization.
+ * When Claude.ai (or any MCP client) connects:
  *
- * This is a self-contained OAuth server that:
- * - Supports dynamic client registration (RFC 7591)
- * - Auto-approves authorization (personal server — no consent page)
- * - Issues and verifies access/refresh tokens in-memory
- * - Supports PKCE (S256) for security
- * - Optionally accepts a static MCP_SECRET as a valid bearer token
+ *   1. Client discovers OAuth metadata → /.well-known/oauth-authorization-server
+ *   2. Client registers dynamically    → POST /register
+ *   3. Client redirects user to        → GET /authorize
+ *   4. Server redirects to Oura OAuth  → cloud.ouraring.com/oauth/authorize
+ *   5. User authorizes with Oura       → Oura redirects to /oauth/callback
+ *   6. Server exchanges Oura code      → api.ouraring.com/oauth/token
+ *   7. Server redirects to client      → redirect_uri?code=OUR_CODE
+ *   8. Client exchanges our code       → POST /token
+ *   9. Client uses our access token    → POST /mcp (Bearer token)
  *
- * Tokens are stored in memory and reset on server restart.
- * Clients will re-authenticate automatically via refresh or re-authorization.
+ * The server stores the Oura token obtained in step 6 and uses it for
+ * all Oura API calls. This eliminates the need for a PAT.
+ *
+ * For backward compatibility, MCP_SECRET is still accepted as a static
+ * bearer token (requires OURA_ACCESS_TOKEN env var for API calls).
  */
 import { randomUUID, randomBytes } from "node:crypto";
 import { Response } from "express";
@@ -29,15 +35,43 @@ import type {
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 
 // ─────────────────────────────────────────────────────────────
+// Oura OAuth Constants
+// ─────────────────────────────────────────────────────────────
+
+const OURA_AUTHORIZE_URL = "https://cloud.ouraring.com/oauth/authorize";
+const OURA_TOKEN_URL = "https://api.ouraring.com/oauth/token";
+const OURA_SCOPES = [
+  "email",
+  "personal",
+  "daily",
+  "heartrate",
+  "workout",
+  "tag",
+  "session",
+  "spo2",
+  "ring_configuration",
+  "stress",
+  "heart_health",
+];
+
+// ─────────────────────────────────────────────────────────────
 // In-Memory Stores
 // ─────────────────────────────────────────────────────────────
+
+interface PendingAuth {
+  clientId: string;
+  codeChallenge: string;
+  redirectUri: string;
+  state?: string;
+  scopes: string[];
+  createdAt: number;
+}
 
 interface AuthCodeEntry {
   clientId: string;
   codeChallenge: string;
   redirectUri: string;
   scopes: string[];
-  resource?: URL;
   createdAt: number;
 }
 
@@ -56,22 +90,45 @@ const AUTH_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const ACCESS_TOKEN_TTL_S = 3600; // 1 hour
 
 // ─────────────────────────────────────────────────────────────
+// Provider Options
+// ─────────────────────────────────────────────────────────────
+
+export interface OuraMcpOAuthProviderOptions {
+  /** Public base URL of this server (e.g., https://your-app.railway.app) */
+  baseUrl: URL;
+  /** Oura OAuth client ID */
+  ouraClientId: string;
+  /** Oura OAuth client secret */
+  ouraClientSecret: string;
+  /** Optional static secret for backward compat (MCP_SECRET) */
+  staticSecret?: string;
+  /** Called when new Oura tokens are obtained via OAuth */
+  onOuraTokens?: (accessToken: string, refreshToken: string) => void;
+}
+
+// ─────────────────────────────────────────────────────────────
 // OAuth Provider
 // ─────────────────────────────────────────────────────────────
 
 export class OuraMcpOAuthProvider implements OAuthServerProvider {
   private clients = new Map<string, OAuthClientInformationFull>();
+  private pendingAuths = new Map<string, PendingAuth>();
   private authCodes = new Map<string, AuthCodeEntry>();
   private accessTokens = new Map<string, TokenEntry>();
   private refreshTokens = new Map<string, RefreshTokenEntry>();
-  private staticSecret: string | undefined;
 
-  /**
-   * @param staticSecret Optional MCP_SECRET for backward-compatible bearer auth.
-   *                     If set, this token is always accepted as a valid bearer token.
-   */
-  constructor(staticSecret?: string) {
-    this.staticSecret = staticSecret;
+  private ouraClientId: string;
+  private ouraClientSecret: string;
+  private callbackUrl: string;
+  private staticSecret: string | undefined;
+  private onOuraTokens?: (accessToken: string, refreshToken: string) => void;
+
+  constructor(options: OuraMcpOAuthProviderOptions) {
+    this.ouraClientId = options.ouraClientId;
+    this.ouraClientSecret = options.ouraClientSecret;
+    this.callbackUrl = new URL("/oauth/callback", options.baseUrl).toString();
+    this.staticSecret = options.staticSecret;
+    this.onOuraTokens = options.onOuraTokens;
   }
 
   // ── Client Registration Store ──────────────────────────────
@@ -103,32 +160,84 @@ export class OuraMcpOAuthProvider implements OAuthServerProvider {
     };
   }
 
-  // ── Authorization ──────────────────────────────────────────
+  // ── Authorization (redirects to Oura) ──────────────────────
 
   async authorize(
     client: OAuthClientInformationFull,
     params: AuthorizationParams,
     res: Response
   ): Promise<void> {
-    // Auto-approve: generate auth code and redirect back immediately.
-    // PKCE ensures only the original requester can exchange the code.
-    const code = randomUUID();
-    this.authCodes.set(code, {
+    // Generate a state token to track this pending authorization
+    const ouraState = randomUUID();
+
+    // Store the pending auth so we can complete it after Oura callback
+    this.pendingAuths.set(ouraState, {
       clientId: client.client_id,
       codeChallenge: params.codeChallenge,
       redirectUri: params.redirectUri,
+      state: params.state,
       scopes: params.scopes || [],
-      resource: params.resource,
       createdAt: Date.now(),
     });
 
-    const redirectUrl = new URL(params.redirectUri);
-    redirectUrl.searchParams.set("code", code);
-    if (params.state) {
-      redirectUrl.searchParams.set("state", params.state);
+    // Redirect user to Oura's OAuth authorization page
+    const ouraAuthUrl = new URL(OURA_AUTHORIZE_URL);
+    ouraAuthUrl.searchParams.set("response_type", "code");
+    ouraAuthUrl.searchParams.set("client_id", this.ouraClientId);
+    ouraAuthUrl.searchParams.set("redirect_uri", this.callbackUrl);
+    ouraAuthUrl.searchParams.set("scope", OURA_SCOPES.join(" "));
+    ouraAuthUrl.searchParams.set("state", ouraState);
+
+    res.redirect(302, ouraAuthUrl.toString());
+  }
+
+  // ── Oura Callback Handler ─────────────────────────────────
+  // Called by the /oauth/callback route when Oura redirects back
+
+  async handleOuraCallback(
+    ouraCode: string,
+    ouraState: string
+  ): Promise<string> {
+    // Look up the pending authorization
+    const pending = this.pendingAuths.get(ouraState);
+    if (!pending) {
+      throw new Error("Invalid or expired OAuth state");
     }
 
-    res.redirect(302, redirectUrl.toString());
+    // Check expiry
+    if (Date.now() - pending.createdAt > AUTH_CODE_TTL_MS) {
+      this.pendingAuths.delete(ouraState);
+      throw new Error("Authorization request expired");
+    }
+
+    this.pendingAuths.delete(ouraState);
+
+    // Exchange Oura's auth code for Oura tokens
+    const ouraTokens = await this.exchangeOuraCode(ouraCode);
+
+    // Notify the server to update the OuraClient with the new token
+    if (this.onOuraTokens) {
+      this.onOuraTokens(ouraTokens.access_token, ouraTokens.refresh_token);
+    }
+
+    // Generate our own auth code for the MCP client (Claude.ai)
+    const ourCode = randomUUID();
+    this.authCodes.set(ourCode, {
+      clientId: pending.clientId,
+      codeChallenge: pending.codeChallenge,
+      redirectUri: pending.redirectUri,
+      scopes: pending.scopes,
+      createdAt: Date.now(),
+    });
+
+    // Build redirect URL back to the MCP client
+    const redirectUrl = new URL(pending.redirectUri);
+    redirectUrl.searchParams.set("code", ourCode);
+    if (pending.state) {
+      redirectUrl.searchParams.set("state", pending.state);
+    }
+
+    return redirectUrl.toString();
   }
 
   // ── Code Challenge Retrieval ───────────────────────────────
@@ -142,7 +251,6 @@ export class OuraMcpOAuthProvider implements OAuthServerProvider {
       throw new Error("Invalid authorization code");
     }
 
-    // Check expiry
     if (Date.now() - entry.createdAt > AUTH_CODE_TTL_MS) {
       this.authCodes.delete(authorizationCode);
       throw new Error("Authorization code expired");
@@ -165,7 +273,6 @@ export class OuraMcpOAuthProvider implements OAuthServerProvider {
       throw new Error("Invalid authorization code");
     }
 
-    // Check expiry
     if (Date.now() - entry.createdAt > AUTH_CODE_TTL_MS) {
       this.authCodes.delete(authorizationCode);
       throw new Error("Authorization code expired");
@@ -188,13 +295,10 @@ export class OuraMcpOAuthProvider implements OAuthServerProvider {
       throw new Error("Invalid refresh token");
     }
 
-    // Rotate refresh token (delete old one)
+    // Rotate refresh token
     this.refreshTokens.delete(refreshToken);
 
-    return this.issueTokenPair(
-      client.client_id,
-      scopes || entry.scopes
-    );
+    return this.issueTokenPair(client.client_id, scopes || entry.scopes);
   }
 
   // ── Token Verification ─────────────────────────────────────
@@ -233,17 +337,13 @@ export class OuraMcpOAuthProvider implements OAuthServerProvider {
     _client: OAuthClientInformationFull,
     request: OAuthTokenRevocationRequest
   ): Promise<void> {
-    // Try both stores — revocation should succeed silently per RFC 7009
     this.accessTokens.delete(request.token);
     this.refreshTokens.delete(request.token);
   }
 
-  // ── Helpers ────────────────────────────────────────────────
+  // ── Private Helpers ────────────────────────────────────────
 
-  private issueTokenPair(
-    clientId: string,
-    scopes: string[]
-  ): OAuthTokens {
+  private issueTokenPair(clientId: string, scopes: string[]): OAuthTokens {
     const accessToken = randomBytes(32).toString("hex");
     const refreshToken = randomBytes(32).toString("hex");
 
@@ -263,6 +363,48 @@ export class OuraMcpOAuthProvider implements OAuthServerProvider {
       token_type: "bearer",
       expires_in: ACCESS_TOKEN_TTL_S,
       refresh_token: refreshToken,
+    };
+  }
+
+  /**
+   * Exchange an Oura authorization code for Oura access/refresh tokens
+   */
+  private async exchangeOuraCode(code: string): Promise<{
+    access_token: string;
+    refresh_token: string;
+  }> {
+    const response = await fetch(OURA_TOKEN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        client_id: this.ouraClientId,
+        client_secret: this.ouraClientSecret,
+        redirect_uri: this.callbackUrl,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(
+        `Oura token exchange failed: ${response.status} ${body}`
+      );
+    }
+
+    const data = (await response.json()) as {
+      access_token: string;
+      refresh_token: string;
+      token_type: string;
+      expires_in: number;
+    };
+
+    console.error("Oura OAuth tokens obtained successfully");
+    return {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
     };
   }
 }

@@ -172,9 +172,10 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - [x] Railway deployment config (Dockerfile, railway.json, .dockerignore, README docs)
 - [x] Deploy to Railway (PAT env var for auth)
 - [x] MCP OAuth 2.1 server provider (enables Claude.ai connector auth)
-  - Dynamic client registration (RFC 7591)
-  - Auto-approve authorization (personal server)
-  - In-memory token store with PKCE (S256) support
+  - Proxies OAuth through Oura (user authenticates with their Oura account)
+  - Dynamic client registration (RFC 7591) + PKCE (S256)
+  - `/authorize` → Oura OAuth → `/oauth/callback` → client redirect
+  - In-memory MCP token store (access + refresh tokens)
   - Backward-compatible with MCP_SECRET bearer auth
 - [ ] Deploy OAuth update to Railway and test with Claude.ai connector
 - [ ] Mobile access when Claude app supports MCP
@@ -187,7 +188,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - [ ] Integration with other health data sources (Apple Health, Fitbit, Garmin)
 - [ ] Predictive insights (e.g., illness prediction from temperature trends)
 
-**Current status:** Phase 4b in progress. Railway deployed with OAuth 2.1 auth. 27 tools, 7 resources, 7 prompts, 326 tests.
+**Current status:** Phase 4b in progress. Railway deployed with OAuth 2.1 auth (Oura proxy). 27 tools, 7 resources, 7 prompts, 325 tests.
 
 ## Key Files
 
@@ -512,17 +513,20 @@ Credentials saved to `~/.oura-mcp/credentials.json`. Server auto-refreshes expir
 
 **Option 3: Remote via Claude.ai connector (Phase 4b - implemented)**
 
-The HTTP transport includes a built-in MCP OAuth 2.1 server that enables Claude.ai's connector:
+The HTTP transport proxies OAuth through Oura — users authenticate directly with Oura:
 - Server runs on Railway (or any host) with `--http` flag
 - Claude.ai discovers OAuth metadata at `/.well-known/oauth-authorization-server`
-- Dynamic client registration + PKCE authorization flow
-- Auto-approves authorization (personal server, no consent page)
-- Tokens are in-memory (reset on restart; clients re-auth automatically)
-- `MCP_SECRET` env var is also accepted as a static bearer token for backward compat
+- Dynamic client registration (RFC 7591) + PKCE (S256) authorization
+- `/authorize` redirects to Oura OAuth → user authorizes → Oura redirects to `/oauth/callback`
+- Server exchanges Oura code for tokens, then redirects back to Claude.ai
+- No PAT needed — the server gets Oura tokens via the OAuth flow
+- `MCP_SECRET` env var is also accepted as a static bearer token (requires `OURA_ACCESS_TOKEN`)
 
-Required env vars for OAuth to work:
-- `OURA_ACCESS_TOKEN` - Oura PAT for API calls
-- `RAILWAY_PUBLIC_DOMAIN` or `BASE_URL` - Public URL for OAuth metadata endpoints
+Required env vars for OAuth:
+- `OURA_CLIENT_ID` - From Oura OAuth app
+- `OURA_CLIENT_SECRET` - From Oura OAuth app
+- `RAILWAY_PUBLIC_DOMAIN` or `BASE_URL` - Public URL for OAuth metadata
+- Oura app redirect URI must be set to `{BASE_URL}/oauth/callback`
 
 ## Oura API Quirks
 

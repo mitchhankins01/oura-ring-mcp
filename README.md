@@ -181,11 +181,16 @@ Restart Claude Desktop. Requires Node >=18.
 
 ## Remote Deployment (Railway)
 
-Deploy the MCP server for remote access with OAuth 2.1 authentication.
+Deploy the MCP server for remote access. The server proxies OAuth through Oura, so users authenticate directly with their Oura account — no PAT needed.
 
-The server includes a built-in OAuth 2.1 provider that works with Claude.ai's connector and any MCP client supporting the standard auth flow.
+### 1. Create an Oura OAuth App
 
-### 1. Deploy
+1. Go to [Oura OAuth Applications](https://cloud.ouraring.com/oauth/applications)
+2. Create a new application
+3. Set the **Redirect URI** to: `https://your-app.railway.app/oauth/callback`
+4. Note the **Client ID** and **Client Secret**
+
+### 2. Deploy
 
 ```bash
 # Install Railway CLI
@@ -197,26 +202,31 @@ railway init
 railway up
 ```
 
-### 2. Set Environment Variables
+### 3. Set Environment Variables
 
 In the Railway dashboard, add:
 
 | Variable | Description |
 |----------|-------------|
-| `OURA_ACCESS_TOKEN` | Your [Oura PAT token](https://cloud.ouraring.com/personal-access-tokens) |
+| `OURA_CLIENT_ID` | From your Oura OAuth app |
+| `OURA_CLIENT_SECRET` | From your Oura OAuth app |
 | `NODE_ENV` | `production` |
 | `MCP_SECRET` | *(Optional)* Static bearer token for Claude Desktop (`openssl rand -base64 32`) |
+| `OURA_ACCESS_TOKEN` | *(Optional)* PAT fallback if not using OAuth (`MCP_SECRET` required) |
 
-Railway automatically sets `PORT` and `RAILWAY_PUBLIC_DOMAIN` — no need to configure those.
+Railway automatically sets `PORT` and `RAILWAY_PUBLIC_DOMAIN`.
 
-### 3. Connect from Claude.ai
+### 4. Connect from Claude.ai
 
 Use the **connector** in Claude.ai:
 1. Go to Settings > MCP Connectors > Add
 2. Enter your server URL: `https://your-app.railway.app/mcp`
-3. The OAuth flow is handled automatically (dynamic client registration + PKCE)
+3. Leave OAuth Client ID and Secret empty (dynamic registration handles it)
+4. You'll be redirected to Oura to authorize access to your data
 
-### 4. Connect from Claude Desktop
+### 5. Connect from Claude Desktop
+
+For Claude Desktop, use `MCP_SECRET` + `OURA_ACCESS_TOKEN`:
 
 ```json
 {
@@ -234,13 +244,16 @@ Use the **connector** in Claude.ai:
 ### Local Testing
 
 ```bash
-# Test HTTP transport locally
-MCP_SECRET=test-secret pnpm start:http
+# With Oura OAuth (full flow)
+OURA_CLIENT_ID=your_id OURA_CLIENT_SECRET=your_secret pnpm start:http
+
+# With static secret only (requires OURA_ACCESS_TOKEN)
+OURA_ACCESS_TOKEN=your_pat MCP_SECRET=test-secret pnpm start:http
 
 # Verify health endpoint
 curl http://localhost:3000/health
 
-# Check OAuth metadata
+# Check OAuth metadata (only available when OURA_CLIENT_ID is set)
 curl http://localhost:3000/.well-known/oauth-authorization-server
 
 # Test authenticated request (with static secret)
