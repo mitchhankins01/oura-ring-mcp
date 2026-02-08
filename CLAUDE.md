@@ -24,8 +24,8 @@ src/
 │   ├── cli.ts         # `npx oura-ring-mcp auth` command
 │   ├── oauth.ts       # OAuth2 flow helpers
 │   └── store.ts       # Token storage (~/.oura-mcp/credentials.json)
-├── transports/        # (Phase 4b) Alternative transports
-│   └── http.ts        # HTTP/SSE for remote access
+├── transports/        # Alternative transports
+│   └── http.ts        # HTTP transport for remote deployment (Phase 4b)
 └── utils/
     ├── formatters.ts  # Human-readable formatting (seconds→hours, etc.)
     ├── errors.ts      # Custom error types and user-friendly messages
@@ -166,11 +166,19 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - [x] MCP Registry submission
 - [x] Demo GIF and examples
 
-### Phase 4b: Remote Access (Future)
-- [ ] HTTP transport with SSE
-- [ ] OAuth callback hosted on server
-- [ ] Deploy to Railway/Fly/Render
+### Phase 4b: Remote Access (In Progress)
+- [x] HTTP transport with Streamable HTTP (blocker for remote use)
+- [ ] Deploy to Railway/Fly/Render (use PAT env var for auth initially)
+- [ ] OAuth callback hosted on server (enables browser-based auth flow)
 - [ ] Mobile access when Claude app supports MCP
+
+### Phase 5: Advanced Analytics & Integrations (Future)
+- [ ] Advanced HRV analysis (frequency domain: VLF, LF, HF, LF/HF ratio)
+- [ ] Poincaré plot metrics (SD1, SD2) for HRV non-linear analysis
+- [ ] Chart-ready data structures for visualization suggestions
+- [ ] Proactive health alerts based on anomaly detection
+- [ ] Integration with other health data sources (Apple Health, Fitbit, Garmin)
+- [ ] Predictive insights (e.g., illness prediction from temperature trends)
 
 **Current status:** Phase 4a complete. Published to npm and MCP Registry. 27 tools, 7 resources, 7 prompts.
 
@@ -184,6 +192,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - `src/auth/store.ts` - Credential storage (~/.oura-mcp/credentials.json)
 - `src/utils/formatters.ts` - Convert seconds to hours, format scores, etc.
 - `src/utils/analysis.ts` - Statistical analysis utilities (Phase 3 foundation)
+- `src/transports/http.ts` - HTTP transport for remote deployment (Phase 4b)
 - `scripts/validate-fixtures.ts` - Validate test fixtures against real Oura API
 - `docs/RESEARCH.md` - **Competitive analysis, derived metrics formulas, Phase 3 inspiration**
 
@@ -256,7 +265,8 @@ Phase 3 foundation for smart tools. All functions are pure, well-tested (66 test
 pnpm install          # Install dependencies
 pnpm build            # Compile TypeScript
 pnpm dev              # Watch mode
-pnpm start            # Run the server
+pnpm start            # Run the server (stdio transport)
+pnpm start -- --http  # Run with HTTP transport (for remote deployment)
 
 # Authentication (Phase 4a)
 npx oura-ring-mcp auth     # OAuth flow: opens browser, saves credentials
@@ -394,6 +404,62 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   ```
 
 Then restart Claude Desktop.
+
+## Remote Deployment (Railway)
+
+Deploy the MCP server for remote access (e.g., from mobile Claude when supported).
+
+**1. Prerequisites:**
+- Railway account (https://railway.app)
+- Oura PAT token (https://cloud.ouraring.com/personal-access-tokens)
+- Generate a secret: `openssl rand -base64 32`
+
+**2. Deploy to Railway:**
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login and deploy
+railway login
+railway init
+railway up
+```
+
+**3. Set Environment Variables** (in Railway dashboard):
+```
+OURA_ACCESS_TOKEN=your_oura_pat_token
+MCP_SECRET=your_random_secret_here
+NODE_ENV=production
+```
+
+**4. Configure Claude Desktop for Remote:**
+```json
+{
+  "mcpServers": {
+    "oura-remote": {
+      "url": "https://your-app.railway.app/mcp",
+      "headers": {
+        "Authorization": "Bearer your_random_secret_here"
+      }
+    }
+  }
+}
+```
+
+**Local Testing:**
+```bash
+# Test HTTP transport locally
+MCP_SECRET=test-secret pnpm start -- --http
+
+# Test health endpoint
+curl http://localhost:3000/health
+
+# Test with auth
+curl -X POST http://localhost:3000/mcp \
+  -H "Authorization: Bearer test-secret" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"capabilities":{}},"id":1}'
+```
 
 ## Oura API Reference
 
