@@ -16,12 +16,21 @@ import "dotenv/config";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
 import { OuraClient } from "./client.js";
 import { registerTools } from "./tools/index.js";
 import { registerResources } from "./resources/index.js";
 import { registerPrompts } from "./prompts/index.js";
 import { loadCredentials, isExpired } from "./auth/store.js";
 import { refreshAccessToken, getOAuthConfigFromEnv } from "./auth/oauth.js";
+
+// Read version from package.json
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(resolve(__dirname, "..", "package.json"), "utf-8"));
+const VERSION: string = pkg.version;
 
 // ─────────────────────────────────────────────────────────────
 // CLI Command Handling
@@ -116,7 +125,7 @@ const accessToken = await getAccessToken();
 
 const server = new McpServer({
   name: "oura-mcp",
-  version: "0.1.0",
+  version: VERSION,
 });
 
 const ouraClient = new OuraClient({ accessToken });

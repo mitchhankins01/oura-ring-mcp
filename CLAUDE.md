@@ -168,7 +168,8 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 
 ### Phase 4b: Remote Access (In Progress)
 - [x] HTTP transport with Streamable HTTP (blocker for remote use)
-- [ ] Deploy to Railway/Fly/Render (use PAT env var for auth initially)
+- [x] Railway deployment config (Dockerfile, railway.json, .dockerignore, README docs)
+- [ ] Deploy to Railway (use PAT env var for auth initially)
 - [ ] OAuth callback hosted on server (enables browser-based auth flow)
 - [ ] Mobile access when Claude app supports MCP
 
@@ -180,7 +181,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - [ ] Integration with other health data sources (Apple Health, Fitbit, Garmin)
 - [ ] Predictive insights (e.g., illness prediction from temperature trends)
 
-**Current status:** Phase 4a complete. Published to npm and MCP Registry. 27 tools, 7 resources, 7 prompts.
+**Current status:** Phase 4b in progress. Railway deployment config ready, needs `railway up`. 27 tools, 7 resources, 7 prompts.
 
 ## Key Files
 
@@ -266,7 +267,7 @@ pnpm install          # Install dependencies
 pnpm build            # Compile TypeScript
 pnpm dev              # Watch mode
 pnpm start            # Run the server (stdio transport)
-pnpm start -- --http  # Run with HTTP transport (for remote deployment)
+pnpm start:http       # Run with HTTP transport (for remote deployment)
 
 # Authentication (Phase 4a)
 npx oura-ring-mcp auth     # OAuth flow: opens browser, saves credentials
@@ -449,7 +450,7 @@ NODE_ENV=production
 **Local Testing:**
 ```bash
 # Test HTTP transport locally
-MCP_SECRET=test-secret pnpm start -- --http
+MCP_SECRET=test-secret pnpm start:http
 
 # Test health endpoint
 curl http://localhost:3000/health

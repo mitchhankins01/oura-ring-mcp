@@ -179,6 +179,65 @@ Restart Claude Desktop. Requires Node >=18.
 | `compare-weeks` | This week vs last week comparison |
 | `tag-analysis` | How a specific tag affects your health |
 
+## Remote Deployment (Railway)
+
+Deploy the MCP server for remote access — useful when Claude supports remote MCP connections (e.g., mobile).
+
+### 1. Deploy
+
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
+
+# Login, init, and deploy
+railway login
+railway init
+railway up
+```
+
+### 2. Set Environment Variables
+
+In the Railway dashboard, add:
+
+| Variable | Description |
+|----------|-------------|
+| `OURA_ACCESS_TOKEN` | Your [Oura PAT token](https://cloud.ouraring.com/personal-access-tokens) |
+| `MCP_SECRET` | A random secret for auth (`openssl rand -base64 32`) |
+| `NODE_ENV` | `production` |
+
+Railway automatically sets `PORT` — no need to configure it.
+
+### 3. Configure Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "oura-remote": {
+      "url": "https://your-app.railway.app/mcp",
+      "headers": {
+        "Authorization": "Bearer your_mcp_secret_here"
+      }
+    }
+  }
+}
+```
+
+### Local Testing
+
+```bash
+# Test HTTP transport locally
+MCP_SECRET=test-secret pnpm start:http
+
+# Verify health endpoint
+curl http://localhost:3000/health
+
+# Test authenticated request
+curl -X POST http://localhost:3000/mcp \
+  -H "Authorization: Bearer test-secret" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"initialize","params":{"capabilities":{}},"id":1}'
+```
+
 ## Contributing
 
 See [CLAUDE.md](CLAUDE.md) for architecture details and development guidelines.
