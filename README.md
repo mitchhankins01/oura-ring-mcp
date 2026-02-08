@@ -181,7 +181,9 @@ Restart Claude Desktop. Requires Node >=18.
 
 ## Remote Deployment (Railway)
 
-Deploy the MCP server for remote access — useful when Claude supports remote MCP connections (e.g., mobile).
+Deploy the MCP server for remote access with OAuth 2.1 authentication.
+
+The server includes a built-in OAuth 2.1 provider that works with Claude.ai's connector and any MCP client supporting the standard auth flow.
 
 ### 1. Deploy
 
@@ -202,12 +204,19 @@ In the Railway dashboard, add:
 | Variable | Description |
 |----------|-------------|
 | `OURA_ACCESS_TOKEN` | Your [Oura PAT token](https://cloud.ouraring.com/personal-access-tokens) |
-| `MCP_SECRET` | A random secret for auth (`openssl rand -base64 32`) |
 | `NODE_ENV` | `production` |
+| `MCP_SECRET` | *(Optional)* Static bearer token for Claude Desktop (`openssl rand -base64 32`) |
 
-Railway automatically sets `PORT` — no need to configure it.
+Railway automatically sets `PORT` and `RAILWAY_PUBLIC_DOMAIN` — no need to configure those.
 
-### 3. Configure Claude Desktop
+### 3. Connect from Claude.ai
+
+Use the **connector** in Claude.ai:
+1. Go to Settings > MCP Connectors > Add
+2. Enter your server URL: `https://your-app.railway.app/mcp`
+3. The OAuth flow is handled automatically (dynamic client registration + PKCE)
+
+### 4. Connect from Claude Desktop
 
 ```json
 {
@@ -231,7 +240,10 @@ MCP_SECRET=test-secret pnpm start:http
 # Verify health endpoint
 curl http://localhost:3000/health
 
-# Test authenticated request
+# Check OAuth metadata
+curl http://localhost:3000/.well-known/oauth-authorization-server
+
+# Test authenticated request (with static secret)
 curl -X POST http://localhost:3000/mcp \
   -H "Authorization: Bearer test-secret" \
   -H "Content-Type: application/json" \

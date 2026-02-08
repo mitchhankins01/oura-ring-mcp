@@ -2,12 +2,25 @@
  * HTTP Transport for Oura MCP Server
  *
  * Enables remote deployment via Streamable HTTP transport.
- * Includes bearer token authentication for security.
+ * Supports two auth modes:
+ *   1. OAuth 2.1 (for Claude.ai connector and other OAuth-capable clients)
+ *   2. Static bearer token via MCP_SECRET (backward compat for Claude Desktop)
+ *
+ * OAuth endpoints (handled by MCP SDK's mcpAuthRouter):
+ *   GET  /.well-known/oauth-authorization-server   — OAuth metadata discovery
+ *   GET  /.well-known/oauth-protected-resource/mcp — Protected resource metadata
+ *   POST /register                                  — Dynamic client registration
+ *   GET  /authorize                                 — Authorization (auto-approves)
+ *   POST /token                                     — Token exchange
+ *   POST /revoke                                    — Token revocation
  */
-import express, { Request, Response, NextFunction } from "express";
+import express, { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
+import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
+import { OuraMcpOAuthProvider } from "../auth/mcp-oauth-provider.js";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -16,41 +29,30 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 export interface HttpTransportOptions {
   /** Port to listen on (default: process.env.PORT || 3000) */
   port?: number;
-  /** Secret for bearer token auth (required in production) */
+  /** Secret for bearer token auth (backward compat with MCP_SECRET) */
   secret?: string;
   /** Enable stateless mode for horizontal scaling (default: true) */
   stateless?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────
-// Authentication Middleware
+// Base URL Resolution
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Bearer token authentication middleware
- * Requires Authorization: Bearer <secret> header
+ * Determine the public base URL for this server.
+ * Checks (in order): BASE_URL env, RAILWAY_PUBLIC_DOMAIN, localhost fallback.
  */
-function createAuthMiddleware(secret: string) {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    // Skip auth for health check
-    if (req.path === "/health") {
-      return next();
-    }
+function resolveBaseUrl(port: number): URL {
+  if (process.env.BASE_URL) {
+    return new URL(process.env.BASE_URL);
+  }
 
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      res.status(401).json({ error: "Missing Authorization header" });
-      return;
-    }
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+    return new URL(`https://${process.env.RAILWAY_PUBLIC_DOMAIN}`);
+  }
 
-    const [scheme, token] = authHeader.split(" ");
-    if (scheme !== "Bearer" || token !== secret) {
-      res.status(401).json({ error: "Invalid credentials" });
-      return;
-    }
-
-    next();
-  };
+  return new URL(`http://localhost:${port}`);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -58,7 +60,7 @@ function createAuthMiddleware(secret: string) {
 // ─────────────────────────────────────────────────────────────
 
 /**
- * Start the MCP server with HTTP transport
+ * Start the MCP server with HTTP transport and OAuth 2.1 authentication
  */
 export async function startHttpServer(
   server: McpServer,
@@ -68,13 +70,7 @@ export async function startHttpServer(
   const secret = options.secret ?? process.env.MCP_SECRET;
   const stateless = options.stateless ?? true;
 
-  // Require secret in production
-  if (!secret && process.env.NODE_ENV === "production") {
-    throw new Error(
-      "MCP_SECRET environment variable is required in production.\n" +
-        "Generate one with: openssl rand -base64 32"
-    );
-  }
+  const baseUrl = resolveBaseUrl(port);
 
   const app = express();
 
@@ -102,22 +98,39 @@ export async function startHttpServer(
     res.json({ status: "ok", service: "oura-mcp" });
   });
 
-  // Apply auth middleware if secret is configured
+  // ── OAuth Setup ──────────────────────────────────────────
+
+  const oauthProvider = new OuraMcpOAuthProvider(secret);
+
+  // Mount OAuth endpoints (metadata, authorize, token, register, revoke)
+  app.use(
+    mcpAuthRouter({
+      provider: oauthProvider,
+      issuerUrl: baseUrl,
+      baseUrl: baseUrl,
+      resourceServerUrl: new URL("/mcp", baseUrl),
+      resourceName: "Oura MCP Server",
+      scopesSupported: [],
+    })
+  );
+
+  console.error("OAuth 2.1 authentication enabled");
   if (secret) {
-    app.use(createAuthMiddleware(secret));
-    console.error("Bearer token authentication enabled");
-  } else {
-    console.error(
-      "WARNING: No MCP_SECRET configured. Server is unprotected!\n" +
-        "Set MCP_SECRET environment variable for production use."
-    );
+    console.error("Static MCP_SECRET also accepted as bearer token");
   }
+
+  // Protect MCP endpoint with bearer auth (validates OAuth tokens + static secret)
+  const bearerAuth = requireBearerAuth({
+    verifier: oauthProvider,
+  });
+
+  // ── MCP Endpoint ─────────────────────────────────────────
 
   // Track transports by session ID for stateful mode
   const transports = new Map<string, StreamableHTTPServerTransport>();
 
-  // MCP endpoint
-  app.all("/mcp", async (req, res) => {
+  // MCP endpoint — all methods handled
+  app.all("/mcp", bearerAuth, async (req: Request, res: Response) => {
     try {
       // Get or create session ID
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
@@ -162,7 +175,7 @@ export async function startHttpServer(
   });
 
   // Handle session cleanup for stateful mode
-  app.delete("/mcp", async (req, res) => {
+  app.delete("/mcp", bearerAuth, async (req: Request, res: Response) => {
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     if (sessionId && transports.has(sessionId)) {
       const transport = transports.get(sessionId)!;
@@ -177,10 +190,9 @@ export async function startHttpServer(
   // Start listening
   app.listen(port, "0.0.0.0", () => {
     console.error(`Oura MCP server running on http://0.0.0.0:${port}`);
-    console.error(`MCP endpoint: POST /mcp`);
+    console.error(`Public URL: ${baseUrl.href}`);
+    console.error(`MCP endpoint: POST ${baseUrl.href}mcp`);
     console.error(`Health check: GET /health`);
-    if (secret) {
-      console.error(`Auth: Bearer token required`);
-    }
+    console.error(`OAuth metadata: GET /.well-known/oauth-authorization-server`);
   });
 }
