@@ -3,8 +3,8 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm (npm install avoids corepack interactive prompts in Docker)
+RUN npm install -g pnpm
 
 # Copy package files
 COPY package.json pnpm-lock.yaml ./
@@ -21,8 +21,8 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install pnpm for production install
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm
+RUN npm install -g pnpm
 
 # Copy package files
 COPY package.json pnpm-lock.yaml ./
