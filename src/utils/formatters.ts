@@ -2,6 +2,8 @@
  * Utilities for formatting Oura data into human-readable strings
  */
 
+import { DateTime } from "luxon";
+
 /**
  * Convert seconds to a human-readable duration string
  * e.g., 27000 -> "7h 30m"
@@ -28,20 +30,20 @@ export function secondsToHours(seconds: number): number {
 }
 
 /**
- * Format a timestamp to a readable time
- * e.g., "2024-01-15T22:30:00+00:00" -> "10:30 PM"
+ * Format a timestamp to a readable time, preserving the original timezone
+ * e.g., "2024-01-15T22:30:00-05:00" -> "10:30 PM"
+ * 
+ * Uses Luxon to parse ISO timestamps which natively preserves the timezone offset,
+ * ensuring times display as the user experienced them.
  */
 export function formatTime(isoTimestamp: string): string {
-  try {
-    const date = new Date(isoTimestamp);
-    return date.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return isoTimestamp;
+  // Parse the ISO timestamp - Luxon preserves the offset from the string
+  const dt = DateTime.fromISO(isoTimestamp, { setZone: true });
+  if (!dt.isValid) {
+    console.warn(`formatTime: Invalid timestamp "${isoTimestamp}" - ${dt.invalidReason}`);
+    return "Invalid Date";
   }
+  return dt.toFormat("h:mm a");
 }
 
 /**

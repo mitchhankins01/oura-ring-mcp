@@ -54,14 +54,26 @@ describe('secondsToHours', () => {
 });
 
 describe('formatTime', () => {
-  it('formats ISO timestamps to readable time', () => {
-    const result = formatTime('2024-01-15T22:30:00+00:00');
-    // Note: This will vary by timezone, so we just check it's formatted
-    expect(result).toMatch(/\d{1,2}:\d{2}\s?(AM|PM)/i);
+  it('preserves original timezone when formatting ISO timestamps', () => {
+    // EST timezone: 10:30 PM should stay 10:30 PM regardless of server timezone
+    expect(formatTime('2024-01-15T22:30:00-05:00')).toBe('10:30 PM');
+    // UTC midnight should be 12:00 AM
+    expect(formatTime('2024-01-15T00:00:00+00:00')).toBe('12:00 AM');
+    // Noon should be 12:00 PM
+    expect(formatTime('2024-01-15T12:00:00+00:00')).toBe('12:00 PM');
+    // Morning time
+    expect(formatTime('2024-01-15T07:15:00-05:00')).toBe('7:15 AM');
+  });
+
+  it('handles edge cases for hour conversion', () => {
+    // 11 PM
+    expect(formatTime('2024-01-15T23:45:00+00:00')).toBe('11:45 PM');
+    // 1 AM
+    expect(formatTime('2024-01-15T01:05:00+00:00')).toBe('1:05 AM');
   });
 
   it('handles invalid timestamps gracefully', () => {
-    // Invalid dates produce "Invalid Date" string from toLocaleTimeString
+    // Invalid dates produce "Invalid Date"
     expect(formatTime('invalid')).toBe('Invalid Date');
     expect(formatTime('not-a-date')).toBe('Invalid Date');
   });
