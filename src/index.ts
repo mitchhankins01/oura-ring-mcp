@@ -66,8 +66,10 @@ if (["auth", "logout", "status"].includes(command)) {
 /**
  * Get access token from environment or stored credentials
  * Handles token refresh if expired
+ *
+ * Returns null if no token is found (HTTP mode can start without one)
  */
-async function getAccessToken(): Promise<string> {
+async function getAccessToken(): Promise<string | null> {
   // First priority: environment variable
   const envToken = process.env.OURA_ACCESS_TOKEN || process.env.OURA_PERSONAL_ACCESS_TOKEN;
   if (envToken) {
@@ -77,15 +79,7 @@ async function getAccessToken(): Promise<string> {
   // Second priority: stored OAuth credentials
   const credentials = await loadCredentials();
   if (!credentials) {
-    console.error(
-      "Error: No Oura credentials found.\n\n" +
-        "Option 1: Set OURA_ACCESS_TOKEN environment variable\n" +
-        "  Get your token at: https://cloud.ouraring.com/personal-access-tokens\n\n" +
-        "Option 2: Authenticate via OAuth\n" +
-        "  Run: npx oura-ring-mcp auth\n" +
-        "  (Requires OURA_CLIENT_ID and OURA_CLIENT_SECRET)"
-    );
-    process.exit(1);
+    return null;
   }
 
   // Check if token needs refresh
@@ -93,11 +87,11 @@ async function getAccessToken(): Promise<string> {
     const oauthConfig = getOAuthConfigFromEnv();
     if (!oauthConfig) {
       console.error(
-        "Error: Token expired and cannot refresh without OAuth credentials.\n" +
+        "Warning: Token expired and cannot refresh without OAuth credentials.\n" +
           "Please set OURA_CLIENT_ID and OURA_CLIENT_SECRET, or run:\n" +
           "  npx oura-ring-mcp auth"
       );
-      process.exit(1);
+      return null;
     }
 
     console.error("Access token expired, refreshing...");
@@ -110,7 +104,7 @@ async function getAccessToken(): Promise<string> {
         `Token refresh failed: ${error instanceof Error ? error.message : error}\n` +
           "Please re-authenticate: npx oura-ring-mcp auth"
       );
-      process.exit(1);
+      return null;
     }
   }
 
@@ -123,12 +117,32 @@ async function getAccessToken(): Promise<string> {
 
 const accessToken = await getAccessToken();
 
+// For stdio transport, a token is required upfront
+if (!accessToken && !useHttpTransport) {
+  console.error(
+    "Error: No Oura credentials found.\n\n" +
+      "Option 1: Set OURA_ACCESS_TOKEN environment variable\n" +
+      "  Get your token at: https://cloud.ouraring.com/personal-access-tokens\n\n" +
+      "Option 2: Authenticate via OAuth\n" +
+      "  Run: npx oura-ring-mcp auth\n" +
+      "  (Requires OURA_CLIENT_ID and OURA_CLIENT_SECRET)"
+  );
+  process.exit(1);
+}
+
+if (!accessToken && useHttpTransport) {
+  console.error(
+    "Warning: No Oura credentials found. Server will start but API calls will fail.\n" +
+      "Set OURA_ACCESS_TOKEN environment variable to enable data access."
+  );
+}
+
 const server = new McpServer({
   name: "oura-mcp",
   version: VERSION,
 });
 
-const ouraClient = new OuraClient({ accessToken });
+const ouraClient = new OuraClient({ accessToken: accessToken ?? "" });
 
 // Register all tools, resources, and prompts with the server
 registerTools(server, ouraClient);
