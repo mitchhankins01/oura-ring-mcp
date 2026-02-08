@@ -26,6 +26,7 @@
     "dev": "tsc --watch",
     "dev:inspect": "concurrently -n tsc,mcp -c blue,green \"pnpm dev\" \"pnpm inspect\"",
     "start": "node dist/index.js",
+    "start:http": "node dist/index.js --http",
     "inspect": "mcp-inspector node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",

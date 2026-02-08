@@ -6,7 +6,13 @@
  * are tested via integration tests rather than unit tests due to
  * vitest module caching behavior.
  */
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(resolve(__dirname, "..", "package.json"), "utf-8"));
 
 // Create mock class constructors
 class MockMcpServer {
@@ -186,7 +192,7 @@ describe("MCP Server", () => {
 
       expect(MockMcpServer.lastConfig).toEqual({
         name: "oura-mcp",
-        version: "0.1.0",
+        version: pkg.version,
       });
     });
 
