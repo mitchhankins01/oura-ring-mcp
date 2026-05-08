@@ -381,6 +381,17 @@ describe("Day of Week Analysis", () => {
     expect(result.weekdayAverage).toBe(80);
     expect(result.weekendAverage).toBe(60);
   });
+
+  it("uses the ISO calendar date instead of the machine timezone", () => {
+    const data = [
+      { date: "2024-01-01T23:30:00-10:00", value: 90 }, // Monday
+      { date: "2024-01-02T00:30:00+14:00", value: 70 }, // Tuesday
+    ];
+    const result = dayOfWeekAnalysis(data);
+
+    expect(result.dayAverages.Monday).toBe(90);
+    expect(result.dayAverages.Tuesday).toBe(70);
+  });
 });
 
 describe("Sleep-Specific Metrics", () => {
@@ -431,6 +442,25 @@ describe("Sleep-Specific Metrics", () => {
       const result = sleepRegularity(bedtimes, waketimes);
 
       expect(result.regularityScore).toBeGreaterThan(70);
+      expect(result.status).toBe("very_regular");
+    });
+
+    it("uses timestamp wall-clock times instead of converting offsets", () => {
+      const bedtimes = [
+        "2024-01-01T22:00:00Z",
+        "2024-01-02T22:00:00+12:00",
+        "2024-01-03T22:00:00-10:00",
+      ];
+      const waketimes = [
+        "2024-01-02T06:00:00Z",
+        "2024-01-03T06:00:00+12:00",
+        "2024-01-04T06:00:00-10:00",
+      ];
+      const result = sleepRegularity(bedtimes, waketimes);
+
+      expect(result.bedtimeStd).toBe(0);
+      expect(result.waketimeStd).toBe(0);
+      expect(result.regularityScore).toBe(100);
       expect(result.status).toBe("very_regular");
     });
 

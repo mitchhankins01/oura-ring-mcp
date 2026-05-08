@@ -690,6 +690,17 @@ export interface DayOfWeekResult {
 }
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const ISO_DATE_PART_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:$|T)/;
+
+function getCalendarDayIndex(date: string): number {
+  const match = ISO_DATE_PART_PATTERN.exec(date);
+  if (match) {
+    const [, year, month, day] = match;
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))).getUTCDay();
+  }
+
+  return new Date(date).getUTCDay();
+}
 
 /**
  * Analyze patterns by day of week
@@ -710,7 +721,7 @@ export function dayOfWeekAnalysis(
   };
 
   for (const { date, value } of data) {
-    const dayIndex = new Date(date).getDay();
+    const dayIndex = getCalendarDayIndex(date);
     const dayName = DAY_NAMES[dayIndex];
     dayTotals[dayName].push(value);
   }
@@ -800,6 +811,19 @@ export interface SleepRegularityResult {
   status: "very_regular" | "regular" | "somewhat_irregular" | "irregular";
 }
 
+const ISO_CLOCK_TIME_PATTERN = /T(\d{2}):(\d{2})/;
+
+function extractClockHour(iso: string): number {
+  const match = ISO_CLOCK_TIME_PATTERN.exec(iso);
+  if (match) {
+    const [, hour, minute] = match;
+    return Number(hour) + Number(minute) / 60;
+  }
+
+  const date = new Date(iso);
+  return date.getUTCHours() + date.getUTCMinutes() / 60;
+}
+
 /**
  * Calculate sleep regularity based on consistency of bed/wake times
  *
@@ -808,18 +832,14 @@ export interface SleepRegularityResult {
  */
 export function sleepRegularity(bedtimes: string[], waketimes: string[]): SleepRegularityResult {
   const extractHour = (iso: string): number => {
-    const date = new Date(iso);
-    let hour = date.getHours() + date.getMinutes() / 60;
+    let hour = extractClockHour(iso);
     // Handle overnight (if bedtime is before midnight, adjust)
     if (hour < 12) hour += 24; // treat early morning as previous night
     return hour;
   };
 
   const bedtimeHours = bedtimes.map(extractHour);
-  const waketimeHours = waketimes.map((iso) => {
-    const date = new Date(iso);
-    return date.getHours() + date.getMinutes() / 60;
-  });
+  const waketimeHours = waketimes.map(extractClockHour);
 
   const bedtimeStd = sampleStandardDeviation(bedtimeHours);
   const waketimeStd = sampleStandardDeviation(waketimeHours);
