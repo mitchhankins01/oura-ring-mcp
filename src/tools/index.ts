@@ -49,6 +49,11 @@ import {
   sleepRegularity,
   correlate,
   hrvRecoveryPattern,
+  formatDataCoverageReport,
+  normalizeCoverageDays,
+  summarizeCoverage,
+  uniqueRecordDays,
+  type CoverageKind,
 } from "../utils/index.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -56,6 +61,193 @@ import {
 // ─────────────────────────────────────────────────────────────
 
 export function registerTools(server: McpServer, client: OuraClient) {
+  // ─────────────────────────────────────────────────────────────
+  // get_data_coverage tool
+  // ─────────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_data_coverage",
+    {
+      description:
+        "Compact preflight check for Oura data availability across endpoints. Use this before deeper analysis to see which domains are available, sparse, missing, or errored.",
+      inputSchema: {
+        days: z.number().optional().describe("Number of recent days to check (default: 30, max: 90)."),
+      },
+    },
+    async ({ days }) => {
+      const coverageDays = normalizeCoverageDays(days);
+      const endDate = getToday();
+      const startDate = getDaysAgo(coverageDays - 1);
+
+      type DomainSpec = {
+        label: string;
+        tool: string;
+        kind: CoverageKind;
+        minRecords?: number;
+        minCoverage?: number;
+        fetch: () => Promise<{ data: unknown[] }>;
+        getDay: (record: unknown) => string | null | undefined;
+      };
+
+      const byDay = dayFromField("day");
+      const byStartDay = dayFromField("start_day");
+      const byTimestamp = dayFromTimestamp("timestamp");
+
+      const domains: DomainSpec[] = [
+        {
+          label: "Sleep",
+          tool: "get_sleep",
+          kind: "daily",
+          fetch: () => client.getSleep(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "Daily sleep",
+          tool: "get_daily_sleep",
+          kind: "daily",
+          fetch: () => client.getDailySleep(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "Readiness",
+          tool: "get_readiness",
+          kind: "daily",
+          fetch: () => client.getDailyReadiness(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "Resilience",
+          tool: "get_resilience",
+          kind: "daily",
+          fetch: () => client.getDailyResilience(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "Sleep time",
+          tool: "get_sleep_time",
+          kind: "daily",
+          fetch: () => client.getSleepTime(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "Rest mode",
+          tool: "get_rest_mode",
+          kind: "event",
+          minRecords: 1,
+          fetch: () => client.getRestModePeriods(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byStartDay,
+        },
+        {
+          label: "Activity",
+          tool: "get_activity",
+          kind: "daily",
+          fetch: () => client.getDailyActivity(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "Workouts",
+          tool: "get_workouts",
+          kind: "event",
+          fetch: () => client.getWorkouts(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "Sessions",
+          tool: "get_sessions",
+          kind: "event",
+          fetch: () => client.getSessions(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "Heart rate",
+          tool: "get_heart_rate",
+          kind: "daily",
+          fetch: () => client.getHeartRate(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byTimestamp,
+        },
+        {
+          label: "Stress",
+          tool: "get_stress",
+          kind: "daily",
+          fetch: () => client.getDailyStress(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "SpO2",
+          tool: "get_spo2",
+          kind: "daily",
+          fetch: () => client.getDailySpo2(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "VO2 max",
+          tool: "get_vo2_max",
+          kind: "event",
+          minRecords: 1,
+          fetch: () => client.getVO2Max(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "Cardiovascular age",
+          tool: "get_cardiovascular_age",
+          kind: "daily",
+          fetch: () => client.getDailyCardiovascularAge(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byDay,
+        },
+        {
+          label: "Enhanced tags",
+          tool: "get_enhanced_tags",
+          kind: "event",
+          fetch: () => client.getEnhancedTags(startDate, endDate) as Promise<{ data: unknown[] }>,
+          getDay: byStartDay,
+        },
+      ];
+
+      const results = await Promise.allSettled(domains.map((domain) => domain.fetch()));
+      const summaries = domains.map((domain, index) => {
+        const result = results[index];
+
+        if (result.status === "rejected") {
+          return summarizeCoverage({
+            label: domain.label,
+            tool: domain.tool,
+            kind: domain.kind,
+            expectedDays: coverageDays,
+            recordCount: 0,
+            error: result.reason,
+          });
+        }
+
+        const records = result.value.data;
+        const uniqueDays = uniqueRecordDays(records, domain.getDay);
+
+        return summarizeCoverage({
+          label: domain.label,
+          tool: domain.tool,
+          kind: domain.kind,
+          expectedDays: coverageDays,
+          recordCount: records.length,
+          uniqueDays,
+          minCoverage: domain.minCoverage,
+          minRecords: domain.minRecords,
+        });
+      });
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: formatDataCoverageReport({
+              days: coverageDays,
+              startDate,
+              endDate,
+              summaries,
+            }),
+          },
+        ],
+      };
+    }
+  );
+
   // ─────────────────────────────────────────────────────────────
   // get_sleep tool
   // ─────────────────────────────────────────────────────────────
@@ -2745,6 +2937,24 @@ export function registerTools(server: McpServer, client: OuraClient) {
       }
     }
   );
+}
+
+function dayFromField(field: string): (record: unknown) => string | null {
+  return (record: unknown) => {
+    if (!record || typeof record !== "object") {
+      return null;
+    }
+
+    const value = (record as Record<string, unknown>)[field];
+    return typeof value === "string" ? value : null;
+  };
+}
+
+function dayFromTimestamp(field: string): (record: unknown) => string | null {
+  return (record: unknown) => {
+    const value = dayFromField(field)(record);
+    return value ? value.slice(0, 10) : null;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────

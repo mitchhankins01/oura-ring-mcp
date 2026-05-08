@@ -136,6 +136,7 @@ Restart Claude Desktop. Requires Node >=18.
 
 | Tool | Description |
 |------|-------------|
+| `get_data_coverage` | Preflight check for which Oura data domains are available, sparse, missing, or errored |
 | `get_sleep` | Sleep data with stages, efficiency, HR, HRV |
 | `get_daily_sleep` | Daily sleep scores with contributors |
 | `get_readiness` | Readiness scores and recovery metrics |

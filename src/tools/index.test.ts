@@ -22,6 +22,8 @@ import cardiovascularAgeResponse from "../../tests/fixtures/oura-cardiovascular-
 import tagsResponse from "../../tests/fixtures/oura-tags-response.json" with { type: "json" };
 import sessionsResponse from "../../tests/fixtures/oura-sessions-response.json" with { type: "json" };
 import enhancedTagsResponse from "../../tests/fixtures/oura-enhanced-tags-response.json" with { type: "json" };
+import sleepTimeResponse from "../../tests/fixtures/oura-sleep-time-response.json" with { type: "json" };
+import restModeResponse from "../../tests/fixtures/oura-rest-mode-response.json" with { type: "json" };
 
 // Type for captured tool handlers
 type ToolHandler = (args: Record<string, unknown>) => Promise<{
@@ -60,6 +62,8 @@ function createMockClient(overrides: Partial<Record<keyof OuraClient, unknown>> 
     getTags: vi.fn().mockResolvedValue(tagsResponse),
     getSessions: vi.fn().mockResolvedValue(sessionsResponse),
     getEnhancedTags: vi.fn().mockResolvedValue(enhancedTagsResponse),
+    getSleepTime: vi.fn().mockResolvedValue(sleepTimeResponse),
+    getRestModePeriods: vi.fn().mockResolvedValue(restModeResponse),
     getPersonalInfo: vi.fn().mockResolvedValue({}),
     ...overrides,
   } as unknown as OuraClient;
@@ -90,13 +94,14 @@ describe("Tool Handlers", () => {
   // ─────────────────────────────────────────────────────────────
 
   describe("registerTools", () => {
-    it("should register all 27 tools", () => {
-      expect(mockServer.getToolCount()).toBe(27);
+    it("should register all 28 tools", () => {
+      expect(mockServer.getToolCount()).toBe(28);
     });
 
     it("should register expected tool names", () => {
       const expectedTools = [
         // Data retrieval tools
+        "get_data_coverage",
         "get_sleep",
         "get_readiness",
         "get_activity",
@@ -130,6 +135,57 @@ describe("Tool Handlers", () => {
       expectedTools.forEach((toolName) => {
         expect(mockServer.getToolHandler(toolName)).toBeDefined();
       });
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // get_data_coverage tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("get_data_coverage", () => {
+    it("should return compact data coverage report", async () => {
+      const handler = mockServer.getToolHandler("get_data_coverage")!;
+      const result = await handler({});
+
+      expect(result.content[0].type).toBe("text");
+      expect(result.content[0].text).toContain("## Data Coverage (30 days)");
+      expect(result.content[0].text).toContain("**Range:** 2023-12-17 to 2024-01-15");
+      expect(result.content[0].text).toContain("| Sleep |");
+      expect(result.content[0].text).toContain("| Daily sleep |");
+      expect(result.content[0].text).toContain("| Heart rate |");
+      expect(result.content[0].text).toContain("**Summary:**");
+    });
+
+    it("should use the default 30 day range", async () => {
+      const handler = mockServer.getToolHandler("get_data_coverage")!;
+      await handler({});
+
+      expect(mockClient.getSleep).toHaveBeenCalledWith("2023-12-17", "2024-01-15");
+      expect(mockClient.getDailyReadiness).toHaveBeenCalledWith("2023-12-17", "2024-01-15");
+      expect(mockClient.getEnhancedTags).toHaveBeenCalledWith("2023-12-17", "2024-01-15");
+    });
+
+    it("should cap days at 90", async () => {
+      const handler = mockServer.getToolHandler("get_data_coverage")!;
+      const result = await handler({ days: 120 });
+
+      expect(result.content[0].text).toContain("## Data Coverage (90 days)");
+      expect(mockClient.getSleep).toHaveBeenCalledWith("2023-10-18", "2024-01-15");
+    });
+
+    it("should keep reporting when one endpoint fails", async () => {
+      mockClient = createMockClient({
+        getDailyStress: vi.fn().mockRejectedValue(new Error("Stress API unavailable")),
+        getDailyActivity: vi.fn().mockResolvedValue(emptyResponse),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_data_coverage")!;
+      const result = await handler({ days: 30 });
+
+      expect(result.content[0].text).toContain("| Stress | errored | Stress API unavailable | `get_stress` |");
+      expect(result.content[0].text).toContain("| Activity | missing | 0 records | `get_activity` |");
+      expect(result.content[0].text).toContain("Endpoint errors");
     });
   });
 
