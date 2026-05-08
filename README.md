@@ -139,13 +139,21 @@ Restart Claude Desktop. Requires Node >=18.
 | `get_sleep` | Sleep data with stages, efficiency, HR, HRV |
 | `get_daily_sleep` | Daily sleep scores with contributors |
 | `get_readiness` | Readiness scores and recovery metrics |
+| `get_resilience` | Stress recovery capacity and resilience contributors |
+| `get_sleep_time` | Personalized bedtime recommendations |
+| `get_rest_mode` | Rest mode periods for illness or recovery |
 | `get_activity` | Steps, calories, intensity breakdown |
 | `get_workouts` | Workout sessions with type and intensity |
+| `get_vo2_max` | Cardiorespiratory fitness measurements |
 | `get_sessions` | Meditation and relaxation sessions |
 | `get_heart_rate` | HR readings throughout the day |
 | `get_stress` | Stress levels and recovery time |
 | `get_spo2` | Blood oxygen and breathing disturbance |
+| `get_cardiovascular_age` | Estimated vascular age from heart health |
 | `get_tags` | User-created tags and notes |
+| `get_enhanced_tags` | Rich tags with names, types, and time ranges |
+| `get_personal_info` | Profile details used for Oura insights |
+| `get_ring_info` | Ring hardware and firmware details |
 
 ### Smart Analysis
 
@@ -158,6 +166,8 @@ Restart Claude Desktop. Requires Node >=18.
 | `compare_conditions` | Compare metrics with/without a tag |
 | `best_sleep_conditions` | What predicts your good vs poor sleep |
 | `analyze_hrv_trend` | HRV trend with rolling averages |
+| `analyze_adherence` | Ring wear consistency and data gaps |
+| `analyze_temperature` | Body temperature patterns and unusual readings |
 
 ## Resources
 
