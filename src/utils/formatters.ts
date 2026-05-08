@@ -85,6 +85,13 @@ export function formatScore(score: number | null): string {
 }
 
 /**
+ * Format Oura API height from meters to whole centimeters.
+ */
+export function formatHeight(heightMeters: number): string {
+  return `${Math.round(heightMeters * 100)} cm`;
+}
+
+/**
  * Format sleep stages as a summary
  */
 export function formatSleepStages(
