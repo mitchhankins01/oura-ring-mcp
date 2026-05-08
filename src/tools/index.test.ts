@@ -134,6 +134,34 @@ describe("Tool Handlers", () => {
   });
 
   // ─────────────────────────────────────────────────────────────
+  // get_personal_info tool
+  // ─────────────────────────────────────────────────────────────
+
+  describe("get_personal_info", () => {
+    it("formats Oura height meters as whole centimeters", async () => {
+      mockClient = createMockClient({
+        getPersonalInfo: vi.fn().mockResolvedValue({
+          age: 35,
+          weight: 93.1,
+          height: 1.73,
+          biological_sex: "male",
+          email: "test@example.com",
+        }),
+      });
+      registerTools(mockServer as unknown as Parameters<typeof registerTools>[0], mockClient);
+
+      const handler = mockServer.getToolHandler("get_personal_info")!;
+      const result = await handler({});
+
+      expect(result.content[0].text).toContain("- **Height:** 173 cm");
+      expect(result.content[0].text).toContain("- **Weight:** 93.1 kg");
+      expect(result.content[0].text).toContain("- **Age:** 35");
+      expect(result.content[0].text).toContain("- **Biological Sex:** male");
+      expect(result.content[0].text).toContain("- **Email:** test@example.com");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────
   // get_sleep tool
   // ─────────────────────────────────────────────────────────────
 

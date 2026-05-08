@@ -32,6 +32,7 @@ import {
 import {
   formatDuration,
   formatTime,
+  formatHeight,
   formatScore,
   getToday,
   getDaysAgo,
@@ -2606,7 +2607,9 @@ export function registerTools(server: McpServer, client: OuraClient) {
           lines.push(`- **Weight:** ${response.weight} kg`);
         }
         if (response.height !== undefined) {
-          lines.push(`- **Height:** ${response.height} cm`);
+          const height =
+            response.height === null ? "null cm" : formatHeight(response.height);
+          lines.push(`- **Height:** ${height}`);
         }
         if (response.biological_sex) {
           lines.push(`- **Biological Sex:** ${response.biological_sex}`);
