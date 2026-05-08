@@ -36,7 +36,9 @@ scripts/
 └── validate-fixtures.ts  # Compare test fixtures against real Oura API
 ```
 
-## Current Tools (27 available)
+## Current Tools (28 available)
+
+- `get_data_coverage` - Compact cross-endpoint availability check to decide which deeper tools are worth calling
 
 **Sleep & Recovery:**
 - `get_sleep` - Complete sleep data: score + detailed sessions (stages, efficiency, HR, HRV)
@@ -190,7 +192,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - [ ] Integration with other health data sources (Apple Health, Fitbit, Garmin)
 - [ ] Predictive insights (e.g., illness prediction from temperature trends)
 
-**Current status:** Phase 4b complete. Railway deployed with OAuth 2.1 auth (Oura proxy), Claude.ai connector working. 27 tools, 7 resources, 7 prompts, 325 tests.
+**Current status:** Phase 4b complete. Railway deployed with OAuth 2.1 auth (Oura proxy), Claude.ai connector working. 28 tools, 7 resources, 7 prompts, 339 tests.
 
 ## Key Files
 
@@ -202,6 +204,7 @@ Pre-defined templates that guide Claude through common health analysis tasks:
 - `src/auth/store.ts` - Credential storage (~/.oura-mcp/credentials.json)
 - `src/utils/formatters.ts` - Convert seconds to hours, format scores, etc.
 - `src/utils/analysis.ts` - Statistical analysis utilities (Phase 3 foundation)
+- `src/utils/dataCoverage.ts` - Helper logic for cross-endpoint data coverage summaries
 - `src/auth/mcp-oauth-provider.ts` - MCP OAuth 2.1 server provider (Phase 4b)
 - `src/transports/http.ts` - HTTP transport with OAuth 2.1 auth (Phase 4b)
 - `scripts/validate-fixtures.ts` - Validate test fixtures against real Oura API
